@@ -122,6 +122,13 @@ export default async function LancamentosPage() {
                         <div className="min-w-0 flex-1">
                           <p className="flex items-center gap-1.5 truncate text-[13.5px] font-medium text-text">
                             {l.descricao}
+                            {/* Compra parcelada: sem isto, doze linhas iguais
+                                no extrato parecem doze compras repetidas. */}
+                            {l.parcela && l.parcelasTotal && (
+                              <span className="tabular shrink-0 rounded-md bg-surface-2 px-1.5 py-0.5 text-[10.5px] font-medium text-muted">
+                                {l.parcela}/{l.parcelasTotal}
+                              </span>
+                            )}
                             {l.importado && (
                               <SparkleIcon
                                 size={12}

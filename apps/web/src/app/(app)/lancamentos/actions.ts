@@ -3,6 +3,7 @@
 import { and, creditCards, db, eq, financialAccounts, sql, transactions } from "@finara/db";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { mesmoDiaNoMes } from "@/lib/datas";
 import { newId } from "@/lib/id";
 import { parseMoney } from "@/lib/money";
 import { garantirFaturaDaCompra } from "@/lib/queries/cartoes";
@@ -19,6 +20,8 @@ const esquema = z.object({
   origem: z.string().optional(),
   titularidade: z.enum(["conjunto", "meu"]),
   observacao: z.string().trim().max(500).optional(),
+  // Parcelamento de compra no cartao. 1 = a vista.
+  parcelas: z.coerce.number().int().min(1).max(36, "No máximo 36 parcelas.").default(1),
 });
 
 export type EstadoLancamento = { erro?: string; ok?: boolean };
@@ -46,13 +49,14 @@ export async function criarLancamento(
     origem: form.get("origem") || undefined,
     titularidade: form.get("titularidade"),
     observacao: form.get("observacao") || undefined,
+    parcelas: form.get("parcelas") || "1",
   });
 
   if (!parsed.success) {
     return { erro: parsed.error.issues[0]?.message ?? "Dados inválidos." };
   }
 
-  const { tipo, valor, descricao, data, categoriaId, origem, titularidade, observacao } =
+  const { tipo, valor, descricao, data, categoriaId, origem, titularidade, observacao, parcelas } =
     parsed.data;
 
   const centavos = parseMoney(valor);
@@ -102,36 +106,62 @@ export async function criarLancamento(
     cartao = c;
   }
 
-  await db.transaction(async (tx) => {
-    // Compra no cartao entra na fatura do ciclo correspondente — e NAO mexe
-    // no saldo da conta. O dinheiro so' sai quando a fatura e' paga.
-    const invoiceId = cartao
-      ? await garantirFaturaDaCompra({
-          workspaceId: workspace.workspaceId,
-          cardId: cartao.id,
-          dataCompra: data,
-          diaFechamento: cartao.fechamento,
-          diaVencimento: cartao.vencimento,
-          executor: tx as unknown as typeof db,
-        })
-      : null;
+  if (parcelas > 1 && !cartao) {
+    return { erro: "Parcelamento só existe em compra no cartão de crédito." };
+  }
 
-    await tx.insert(transactions).values({
-      id: newId(),
-      workspaceId: workspace.workspaceId,
-      type: tipo,
-      status: "cleared",
-      // Sempre positivo — o sinal mora em `type`. Ver o schema.
-      amount: centavos,
-      description: descricao,
-      notes: observacao ?? null,
-      date: data,
-      accountId: contaValida,
-      cardId: cartao?.id ?? null,
-      invoiceId,
-      categoryId: categoriaId || null,
-      ownerId: titularidade === "conjunto" ? null : usuario.id,
-    });
+  // Divisao em centavos: a sobra vai para a PRIMEIRA parcela, como fazem as
+  // administradoras. Sem isso a soma das parcelas nao fecha com o preco.
+  const base = Math.floor(centavos / parcelas);
+  const sobra = centavos - base * parcelas;
+  const grupoId = parcelas > 1 ? newId() : null;
+
+  await db.transaction(async (tx) => {
+    const executor = tx as unknown as typeof db;
+
+    for (let i = 0; i < parcelas; i++) {
+      /**
+       * Cada parcela tem a data do mes correspondente, e e' a data que decide
+       * em qual fatura ela cai. Jogar as 12 parcelas na fatura da compra —
+       * que e' o que acontecia antes, porque nem existia parcelamento —
+       * inflava um mes e esvaziava os outros onze.
+       */
+      const dataDaParcela = i === 0 ? data : mesmoDiaNoMes(data, i);
+
+      const invoiceId = cartao
+        ? await garantirFaturaDaCompra({
+            workspaceId: workspace.workspaceId,
+            cardId: cartao.id,
+            dataCompra: dataDaParcela,
+            diaFechamento: cartao.fechamento,
+            diaVencimento: cartao.vencimento,
+            executor,
+          })
+        : null;
+
+      await tx.insert(transactions).values({
+        id: newId(),
+        workspaceId: workspace.workspaceId,
+        type: tipo,
+        status: "cleared",
+        // Sempre positivo — o sinal mora em `type`. Ver o schema.
+        amount: i === 0 ? base + sobra : base,
+        description: descricao,
+        notes: observacao ?? null,
+        date: dataDaParcela,
+        // Competencia fica na data da COMPRA: e' o mes em que o gasto pesa,
+        // mesmo que a parcela caia um ano depois.
+        competenceDate: parcelas > 1 ? data : null,
+        accountId: contaValida,
+        cardId: cartao?.id ?? null,
+        invoiceId,
+        categoryId: categoriaId || null,
+        ownerId: titularidade === "conjunto" ? null : usuario.id,
+        installmentNumber: parcelas > 1 ? i + 1 : null,
+        installmentTotal: parcelas > 1 ? parcelas : null,
+        installmentGroupId: grupoId,
+      });
+    }
 
     if (contaValida) {
       const delta = tipo === "income" ? centavos : -centavos;

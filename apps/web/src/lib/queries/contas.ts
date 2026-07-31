@@ -77,6 +77,8 @@ export async function listarLancamentos({ workspaceId, limite = 50, offset = 0 }
       origem: sql<string | null>`coalesce(${financialAccounts.name}, ${creditCards.name})`,
       // Lancamento importado tem connectionId; o manual, nao.
       importado: sql<boolean>`${transactions.connectionId} is not null`,
+      parcela: transactions.installmentNumber,
+      parcelasTotal: transactions.installmentTotal,
     })
     .from(transactions)
     .leftJoin(categories, eq(categories.id, transactions.categoryId))

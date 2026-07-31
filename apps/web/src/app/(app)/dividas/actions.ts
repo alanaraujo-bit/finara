@@ -12,45 +12,35 @@ import {
 } from "@finara/db";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { paraDataLocal } from "@/lib/datas";
+import { mesmoDiaNoMes, paraDataLocal } from "@/lib/datas";
 import { newId } from "@/lib/id";
 import { parseMoney } from "@/lib/money";
 import { exigirSessao } from "@/lib/session";
 
+/**
+ * As perguntas sao as que a pessoa sabe responder de cabeca olhando o boleto:
+ * quantas parcelas ao todo, quantas ja' pagou e quanto e' a proxima. Total,
+ * quanto ja' foi quitado, quanto falta e a data de cada parcela — passada e
+ * futura — sao deduzidos daqui.
+ *
+ * O caminho antigo pedia o valor TOTAL da divida, que quase ninguem tem na
+ * ponta da lingua: exigia abrir o contrato ou multiplicar na mao.
+ */
 const esquema = z.object({
   nome: z.string().trim().min(2, "Dê um nome à dívida.").max(60),
   credor: z.string().trim().max(60).optional(),
-  total: z.string().min(1, "Informe o valor total."),
-  parcelas: z.coerce.number().int().min(1, "Mínimo 1 parcela.").max(480, "Máximo 480 parcelas."),
-  primeiroVencimento: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Data inválida."),
+  parcelasTotal: z.coerce
+    .number()
+    .int()
+    .min(1, "Mínimo 1 parcela.")
+    .max(480, "Máximo 480 parcelas."),
+  parcelasPagas: z.coerce.number().int().min(0, "Não pode ser negativo.").max(480),
+  valorParcela: z.string().min(1, "Informe o valor da parcela."),
+  proximoVencimento: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Data inválida."),
   titularidade: z.enum(["conjunto", "meu"]),
 });
 
 export type EstadoDivida = { erro?: string; ok?: boolean };
-
-function ultimoDiaDoMes(ano: number, mes: number): number {
-  return new Date(Date.UTC(ano, mes, 0)).getUTCDate();
-}
-
-/**
- * Gera as datas de vencimento das parcelas, uma por mes.
- * O dia e' ancorado no primeiro vencimento e encolhe em meses curtos —
- * parcela do dia 31 vence dia 28 em fevereiro, nao dia 3 de marco.
- */
-function datasDasParcelas(primeiro: string, quantidade: number): string[] {
-  const [ano0, mes0, dia0] = primeiro.split("-").map(Number) as [number, number, number];
-  const datas: string[] = [];
-
-  for (let i = 0; i < quantidade; i++) {
-    const total = mes0 - 1 + i;
-    const ano = ano0 + Math.floor(total / 12);
-    const mes = (total % 12) + 1;
-    const dia = Math.min(dia0, ultimoDiaDoMes(ano, mes));
-    datas.push(`${ano}-${String(mes).padStart(2, "0")}-${String(dia).padStart(2, "0")}`);
-  }
-
-  return datas;
-}
 
 export async function criarDivida(_anterior: EstadoDivida, form: FormData): Promise<EstadoDivida> {
   const { usuario, workspace } = await exigirSessao();
@@ -58,9 +48,10 @@ export async function criarDivida(_anterior: EstadoDivida, form: FormData): Prom
   const parsed = esquema.safeParse({
     nome: form.get("nome"),
     credor: form.get("credor") || undefined,
-    total: form.get("total"),
-    parcelas: form.get("parcelas"),
-    primeiroVencimento: form.get("primeiroVencimento"),
+    parcelasTotal: form.get("parcelasTotal"),
+    parcelasPagas: form.get("parcelasPagas") || "0",
+    valorParcela: form.get("valorParcela"),
+    proximoVencimento: form.get("proximoVencimento"),
     titularidade: form.get("titularidade"),
   });
 
@@ -69,17 +60,30 @@ export async function criarDivida(_anterior: EstadoDivida, form: FormData): Prom
   }
 
   const d = parsed.data;
-  const total = parseMoney(d.total);
+  const parcela = parseMoney(d.valorParcela);
 
-  if (total <= 0) return { erro: "O valor total precisa ser maior que zero." };
+  if (parcela <= 0) return { erro: "O valor da parcela precisa ser maior que zero." };
 
-  // Divisao em centavos: o resto vai para a ULTIMA parcela, senao a soma das
-  // parcelas nao bate com o total e sobra centavo perdido.
-  const base = Math.floor(total / d.parcelas);
-  const resto = total - base * d.parcelas;
+  if (d.parcelasPagas >= d.parcelasTotal) {
+    return {
+      erro: "Se já pagou todas as parcelas, não há dívida a acompanhar. Confira quantas faltam.",
+    };
+  }
+
+  const total = parcela * d.parcelasTotal;
+  const pago = parcela * d.parcelasPagas;
+
+  /**
+   * A ancora e' o PROXIMO vencimento. As parcelas ja' pagas ficam atras dele
+   * (deslocamento negativo) e as futuras a frente. Ancorar aqui, e nao no
+   * primeiro vencimento, e' o que dispensa o usuario de lembrar quando a
+   * divida comecou.
+   */
+  const datas = Array.from({ length: d.parcelasTotal }, (_, i) =>
+    mesmoDiaNoMes(d.proximoVencimento, i - d.parcelasPagas),
+  );
 
   const dividaId = newId();
-  const datas = datasDasParcelas(d.primeiroVencimento, d.parcelas);
 
   await db.transaction(async (tx) => {
     await tx.insert(debts).values({
@@ -90,24 +94,39 @@ export async function criarDivida(_anterior: EstadoDivida, form: FormData): Prom
       creditor: d.credor ?? null,
       principalAmount: total,
       totalAmount: total,
-      installmentsTotal: d.parcelas,
-      startDate: d.primeiroVencimento,
+      paidAmount: pago,
+      installmentsTotal: d.parcelasTotal,
+      installmentsPaid: d.parcelasPagas,
+      startDate: datas[0]!,
       endDate: datas[datas.length - 1] ?? null,
-      dueDay: Number(d.primeiroVencimento.slice(-2)),
+      dueDay: Number(d.proximoVencimento.slice(-2)),
       status: "active",
     });
 
     await tx.insert(debtInstallments).values(
-      datas.map((data, i) => ({
-        id: newId(),
-        debtId: dividaId,
-        workspaceId: workspace.workspaceId,
-        number: i + 1,
-        amount: i === datas.length - 1 ? base + resto : base,
-        dueDate: data,
-        status: "pending" as const,
-      })),
+      datas.map((data, i) => {
+        const quitada = i < d.parcelasPagas;
+        return {
+          id: newId(),
+          debtId: dividaId,
+          workspaceId: workspace.workspaceId,
+          number: i + 1,
+          amount: parcela,
+          dueDate: data,
+          paidAmount: quitada ? parcela : 0,
+          status: quitada ? ("paid" as const) : ("pending" as const),
+        };
+      }),
     );
+
+    /**
+     * De proposito, as parcelas ja' pagas NAO viram lancamento.
+     *
+     * Elas foram pagas antes de a divida existir aqui — inventar despesas
+     * retroativas encheria o extrato e o calendario de gastos que o usuario
+     * nunca registrou, e estragaria a comparacao entre meses. O historico
+     * fica registrado na divida; o fluxo de caixa comeca da proxima parcela.
+     */
   });
 
   revalidatePath("/dividas");

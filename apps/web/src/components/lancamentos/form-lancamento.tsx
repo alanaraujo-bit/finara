@@ -7,8 +7,33 @@ import { criarLancamento, type EstadoLancamento } from "@/app/(app)/lancamentos/
 import { Button } from "@/components/ui/button";
 import { FieldError, Input, Label } from "@/components/ui/input";
 import { SegmentedField, Select } from "@/components/ui/select";
+import { mesmoDiaNoMes, mesPorExtenso } from "@/lib/datas";
+import { formatMoney, parseMoney } from "@/lib/money";
 
 type Opcao = { id: string; nome: string; tipo?: string };
+
+/**
+ * Espelha a divisao que a server action faz — inclusive a sobra de centavos
+ * indo para a primeira parcela. Serve para o usuario ver "12x de R$ 250,00"
+ * e em que meses isso cai, antes de salvar.
+ */
+function dividirParcelas(valor: string, parcelas: string, dataCompra: string) {
+  const centavos = parseMoney(valor);
+  const quantidade = Number(parcelas);
+
+  if (centavos <= 0 || !Number.isInteger(quantidade) || quantidade < 2) return null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dataCompra)) return null;
+
+  const parcela = Math.floor(centavos / quantidade);
+
+  return {
+    quantidade,
+    parcela,
+    sobra: centavos - parcela * quantidade,
+    primeiroMes: mesPorExtenso(dataCompra),
+    ultimoMes: mesPorExtenso(mesmoDiaNoMes(dataCompra, quantidade - 1)),
+  };
+}
 
 export function FormLancamento({
   contas,
@@ -31,6 +56,14 @@ export function FormLancamento({
 
   const [tipo, setTipo] = useState("expense");
   const [titularidade, setTitularidade] = useState("conjunto");
+  const [origem, setOrigem] = useState("");
+  const [valor, setValor] = useState("");
+  const [parcelas, setParcelas] = useState("1");
+  const [data, setData] = useState(dataPadrao);
+
+  // Parcelar so' faz sentido no cartao: em conta, o dinheiro sai de uma vez.
+  const noCartao = origem.startsWith("cartao:");
+  const divisao = noCartao ? dividirParcelas(valor, parcelas, data) : null;
 
   // As categorias sao separadas por natureza: oferecer "Salário" numa despesa
   // so' polui a lista e convida ao erro de classificacao.
@@ -71,6 +104,8 @@ export function FormLancamento({
             placeholder="0,00"
             autoComplete="off"
             className="tabular pl-11 text-[17px] font-semibold"
+            value={valor}
+            onChange={(e) => setValor(e.target.value)}
             disabled={pendente}
             required
             autoFocus
@@ -97,7 +132,8 @@ export function FormLancamento({
             id="data"
             name="data"
             type="date"
-            defaultValue={dataPadrao}
+            value={data}
+            onChange={(e) => setData(e.target.value)}
             disabled={pendente}
             required
           />
@@ -120,7 +156,13 @@ export function FormLancamento({
         <Label htmlFor="origem">De onde saiu</Label>
         {/* Um campo so' para conta e cartao: como sao mutuamente exclusivos,
             dois selects permitiriam preencher os dois e criar estado invalido. */}
-        <Select id="origem" name="origem" disabled={pendente} defaultValue="">
+        <Select
+          id="origem"
+          name="origem"
+          disabled={pendente}
+          value={origem}
+          onChange={(e) => setOrigem(e.target.value)}
+        >
           <option value="">Não vincular (não afeta saldo)</option>
           {contas.length > 0 && (
             <optgroup label="Contas">
@@ -148,13 +190,56 @@ export function FormLancamento({
             saldo é movimentado.
           </p>
         )}
-        {cartoes.length > 0 && tipo === "expense" && (
+        {cartoes.length > 0 && tipo === "expense" && !noCartao && (
           <p className="mt-1.5 text-[12.5px] text-muted">
             Compra no cartão entra na fatura do ciclo e não altera o saldo agora — o dinheiro sai
             quando a fatura for paga.
           </p>
         )}
       </div>
+
+      {noCartao && (
+        <div className="animate-[fade-in_0.25s_ease-out]">
+          <Label htmlFor="parcelas">Em quantas vezes</Label>
+          <Select
+            id="parcelas"
+            name="parcelas"
+            disabled={pendente}
+            value={parcelas}
+            onChange={(e) => setParcelas(e.target.value)}
+          >
+            <option value="1">À vista</option>
+            {Array.from({ length: 35 }, (_, i) => i + 2).map((n) => (
+              <option key={n} value={n}>
+                {n}x
+              </option>
+            ))}
+          </Select>
+
+          {divisao ? (
+            <p className="mt-2 rounded-xl bg-surface-2 px-3 py-2.5 text-[12.5px] leading-relaxed text-muted">
+              <span className="tabular font-medium text-text">
+                {divisao.quantidade}x de {formatMoney(divisao.parcela)}
+              </span>
+              {divisao.sobra > 0 && (
+                <>
+                  {" "}
+                  (a primeira sai{" "}
+                  <span className="tabular text-text">
+                    {formatMoney(divisao.parcela + divisao.sobra)}
+                  </span>
+                  , com a sobra dos centavos)
+                </>
+              )}
+              {" — "}uma parcela por fatura, de {divisao.primeiroMes} a {divisao.ultimoMes}.
+            </p>
+          ) : (
+            <p className="mt-1.5 text-[12.5px] text-muted">
+              Cada parcela entra na fatura do mês dela, não todas de uma vez.
+            </p>
+          )}
+        </div>
+      )}
 
       {temParceiro && (
         <div>

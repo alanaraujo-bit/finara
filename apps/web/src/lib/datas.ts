@@ -42,6 +42,41 @@ export function limitesDoMes(referencia: string = mesReferencia()): {
   };
 }
 
+/** Ultimo dia do mes, ja' tratando ano bissexto. */
+function ultimoDiaDoMes(ano: number, mes: number): number {
+  return new Date(Date.UTC(ano, mes, 0)).getUTCDate();
+}
+
+/**
+ * A mesma data N meses adiante (ou atras, com N negativo), encolhendo o dia
+ * em mes curto: 31 de janeiro + 1 mes = 28 de fevereiro, nao 3 de marco.
+ *
+ * O dia sai SEMPRE da data original, nunca do resultado anterior. Aplicar
+ * mes a mes acumularia desvio — a parcela ancorada no dia 31 viraria dia 28
+ * para sempre depois de passar por um fevereiro.
+ */
+export function mesmoDiaNoMes(dataIso: string, deslocamento: number): string {
+  const [ano0, mes0, dia0] = dataIso.split("-").map(Number) as [number, number, number];
+
+  const indice = mes0 - 1 + deslocamento;
+  const ano = ano0 + Math.floor(indice / 12);
+  // Resto de negativo em JS pode vir negativo; o +12 normaliza.
+  const mes = (((indice % 12) + 12) % 12) + 1;
+  const dia = Math.min(dia0, ultimoDiaDoMes(ano, mes));
+
+  return `${ano}-${String(mes).padStart(2, "0")}-${String(dia).padStart(2, "0")}`;
+}
+
+/** "março de 2028" — para dizer quando uma parcela termina. */
+export function mesPorExtenso(dataIso: string): string {
+  const [ano, mes] = dataIso.split("-").map(Number) as [number, number];
+  return new Intl.DateTimeFormat("pt-BR", {
+    timeZone: "UTC",
+    month: "long",
+    year: "numeric",
+  }).format(new Date(Date.UTC(ano, mes - 1, 1)));
+}
+
 /** Soma dias a uma data 'YYYY-MM-DD' sem passar por fuso nenhum. */
 export function somarDias(dataIso: string, dias: number): string {
   const [ano, mes, dia] = dataIso.split("-").map(Number) as [number, number, number];

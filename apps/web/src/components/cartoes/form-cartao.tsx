@@ -64,6 +64,17 @@ function Campos({
 }) {
   const router = useRouter();
   const [titularidade, setTitularidade] = useState("conjunto");
+  const [fechamento, setFechamento] = useState("28");
+  const [vencimento, setVencimento] = useState("7");
+  // Enquanto o usuario nao escolher o vencimento na mao, ele acompanha o
+  // fechamento — na maioria dos cartoes a distancia e' de uma semana a dez
+  // dias, e adivinhar certo poupa uma pergunta.
+  const [vencimentoManual, setVencimentoManual] = useState(false);
+
+  function mudarFechamento(dia: string) {
+    setFechamento(dia);
+    if (!vencimentoManual) setVencimento(String(((Number(dia) + 9) % 31) + 1));
+  }
 
   const [estado, acao, pendente] = useActionState<EstadoCartao, FormData>(
     async (anterior, form) => {
@@ -140,7 +151,13 @@ function Campos({
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
           <Label htmlFor="diaFechamento">Dia do fechamento</Label>
-          <Select id="diaFechamento" name="diaFechamento" defaultValue="28" disabled={pendente}>
+          <Select
+            id="diaFechamento"
+            name="diaFechamento"
+            value={fechamento}
+            onChange={(e) => mudarFechamento(e.target.value)}
+            disabled={pendente}
+          >
             {DIAS.map((d) => (
               <option key={d} value={d}>
                 Dia {d}
@@ -150,7 +167,16 @@ function Campos({
         </div>
         <div>
           <Label htmlFor="diaVencimento">Dia do vencimento</Label>
-          <Select id="diaVencimento" name="diaVencimento" defaultValue="5" disabled={pendente}>
+          <Select
+            id="diaVencimento"
+            name="diaVencimento"
+            value={vencimento}
+            onChange={(e) => {
+              setVencimentoManual(true);
+              setVencimento(e.target.value);
+            }}
+            disabled={pendente}
+          >
             {DIAS.map((d) => (
               <option key={d} value={d}>
                 Dia {d}
