@@ -614,14 +614,23 @@
 
 .fmodal {
   /* O UA da' margin auto e max-width/height de 'calc(100% - 6px)'; aqui o
-     dialog e' a area inteira e o painel dentro dele e' que tem tamanho. */
+     dialog e' a area inteira e o painel dentro dele e' que tem tamanho.
+
+     `inset: 0` no lugar de `100vw`/`100dvh`: o dialog ja' e' `position: fixed`,
+     entao grudar nos quatro lados o faz ocupar a janela inteira SEM depender de
+     unidade de viewport. `dvh` e' recalculado quando a area util muda — e ela
+     muda no exato momento da abertura, porque a trava de rolagem fixa o <body>.
+     Era uma medida da folha antes da trava e outra depois: a caixa nascia num
+     tamanho e se ajustava para outro, que e' a "tela que aparece e depois vira
+     outra". Com `inset`, a geometria e' uma so' do primeiro quadro ao ultimo. */
   margin: 0;
   padding: 0;
   border: 0;
-  max-width: 100vw;
-  max-height: 100dvh;
-  width: 100vw;
-  height: 100dvh;
+  inset: 0;
+  width: auto;
+  height: auto;
+  max-width: none;
+  max-height: none;
   background: transparent;
   overflow: hidden;
 
@@ -677,9 +686,17 @@
   display: flex;
   flex-direction: column;
   width: 100%;
-  /* 92dvh e nao 100: a faixa de fundo visivel acima e' o que comunica que a
-     folha e' uma camada, e nao uma tela nova. */
-  max-height: 92dvh;
+  /* 92% e nao 100: a faixa de fundo visivel acima e' o que comunica que a
+     folha e' uma camada, e nao uma tela nova. Porcentagem do dialog, e nao
+     `dvh`, pelo mesmo motivo do `inset` la' em cima — uma medida so'. */
+  max-height: 92%;
+
+  /* O painel nunca leva anel de foco. Ele recebe foco por programa quando a
+     folha abre (para o teclado do celular NAO subir junto), e o navegador
+     desenha o anel de `:focus-visible` em volta dele — um contorno jade
+     contornando a folha inteira, que parece defeito de renderizacao. Os campos
+     de dentro continuam com o anel deles, que e' onde ele significa algo. */
+  outline: none;
   background: var(--surface);
   border: 1px solid var(--border);
   border-bottom: 0;
@@ -752,7 +769,7 @@
 
   .fmodal-painel {
     width: min(30rem, 100vw - 3rem);
-    max-height: min(46rem, 100dvh - 4rem);
+    max-height: min(46rem, calc(100% - 4rem));
     border: 1px solid var(--border);
     border-radius: var(--radius-2xl);
     box-shadow: 0 24px 60px rgb(0 0 0 / 0.24);
