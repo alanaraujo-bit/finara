@@ -59,21 +59,57 @@ export function splitMoney(cents: number): {
   };
 }
 
-/** "1.234,56" ou "1234.56" -> 123456 centavos. Tolerante ao que o usuario digita. */
+/**
+ * "1.234,56" ou "1234.56" -> 123456 centavos. Tolerante ao que o usuario digita.
+ *
+ * A conta e' feita sobre a STRING, digito a digito — nunca com
+ * `parseFloat(x) * 100`. Aquele caminho parece inofensivo e falha de verdade:
+ * "1,005" vira 100.49999999999999 em ponto flutuante e arredonda pra 100
+ * centavos em vez de 101. Um centavo perdido em cada lancamento assim vira
+ * saldo errado que ninguem consegue explicar depois.
+ */
 export function parseMoney(input: string): number {
   const limpo = input.replace(/[^\d,.-]/g, "").trim();
   if (!limpo) return 0;
 
-  // Se tem virgula, ela e' o separador decimal (padrao pt-BR) e o ponto e' milhar.
-  const normalizado = limpo.includes(",")
-    ? limpo.replace(/\./g, "").replace(",", ".")
-    : limpo;
+  const negativo = limpo.startsWith("-");
+  const semSinal = limpo.replace(/-/g, "");
+  if (!semSinal) return 0;
 
-  const valor = Number.parseFloat(normalizado);
-  if (Number.isNaN(valor)) return 0;
+  let inteiro: string;
+  let fracao: string;
 
-  // Arredonda no centavo pra nunca guardar fracao de centavo.
-  return Math.round(valor * 100);
+  if (semSinal.includes(",")) {
+    // Virgula presente: ela e' o decimal (pt-BR), pontos sao milhar.
+    const [i = "", f = ""] = semSinal.replace(/\./g, "").split(",");
+    inteiro = i;
+    fracao = f;
+  } else if (semSinal.includes(".")) {
+    const partes = semSinal.split(".");
+    const ultima = partes[partes.length - 1] ?? "";
+    // "1.005" e' mil e cinco (milhar); "100.50" e' cem e cinquenta centavos.
+    // O criterio e' o tamanho do ultimo grupo: 1 ou 2 digitos = decimal.
+    if (partes.length > 1 && ultima.length > 0 && ultima.length <= 2) {
+      fracao = ultima;
+      inteiro = partes.slice(0, -1).join("");
+    } else {
+      inteiro = partes.join("");
+      fracao = "";
+    }
+  } else {
+    inteiro = semSinal;
+    fracao = "";
+  }
+
+  if (!/^\d*$/.test(inteiro) || !/^\d*$/.test(fracao)) return 0;
+
+  // Tres casas: as duas primeiras sao os centavos, a terceira decide o
+  // arredondamento (meio centavo sobe).
+  const casas = fracao.padEnd(3, "0").slice(0, 3);
+  const centavos = Number(inteiro || "0") * 100 + Number(casas.slice(0, 2) || "0");
+  const total = centavos + (Number(casas[2] ?? "0") >= 5 ? 1 : 0);
+
+  return negativo ? -total : total;
 }
 
 /** Percentual com uma casa, ja' tratando divisao por zero. */

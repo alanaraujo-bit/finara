@@ -1,13 +1,27 @@
 "use client";
 
 import { BankIcon, SpinnerGapIcon } from "@phosphor-icons/react";
+import dynamic from "next/dynamic";
 import { useTheme } from "next-themes";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { PluggyConnect } from "react-pluggy-connect";
 import { registrarConexao } from "@/app/(app)/conexoes/actions";
 import { Button } from "@/components/ui/button";
 import { FieldError } from "@/components/ui/input";
+
+/**
+ * Carregado dinamicamente com `ssr: false` porque o `react-pluggy-connect`
+ * toca em `window` ja' na avaliacao do modulo.
+ *
+ * "use client" NAO impede a renderizacao no servidor — apenas marca o
+ * componente como interativo no cliente. O Next ainda executa o modulo no
+ * servidor para o HTML inicial, e ali `window` nao existe. Sem este dynamic,
+ * a pagina inteira quebra com 500.
+ */
+const PluggyConnect = dynamic(
+  () => import("react-pluggy-connect").then((m) => m.PluggyConnect),
+  { ssr: false },
+);
 
 /**
  * Abre o Pluggy Connect para o usuario autorizar o banco.
