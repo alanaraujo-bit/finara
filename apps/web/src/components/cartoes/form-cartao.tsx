@@ -163,7 +163,6 @@ function Campos({
             autoComplete="off"
             disabled={pendente}
             required
-            autoFocus
           />
         </div>
         <div>

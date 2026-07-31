@@ -223,7 +223,6 @@ export function FormLancamento({
             onChange={(e) => setValor(e.target.value)}
             disabled={pendente}
             required
-            autoFocus
           />
         </div>
       </div>

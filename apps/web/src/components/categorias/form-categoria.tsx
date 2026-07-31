@@ -104,7 +104,6 @@ function Campos({
                 maxLength={40}
                 disabled={pendente}
                 required
-                autoFocus
               />
             </div>
           </div>

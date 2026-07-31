@@ -156,7 +156,6 @@ function Campos({
           autoComplete="off"
           disabled={pendente}
           required
-          autoFocus
         />
       </div>
 
@@ -375,7 +374,6 @@ function AjusteDeSaldo({
               value={saldoReal}
               onChange={(e) => setSaldoReal(e.target.value)}
               disabled={pendente}
-              autoFocus
             />
           </div>
         </div>

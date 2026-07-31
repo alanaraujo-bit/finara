@@ -157,7 +157,6 @@ function CamposAssinatura({
               autoComplete="off"
               disabled={pendente}
               required
-              autoFocus
             />
           </div>
           <div>

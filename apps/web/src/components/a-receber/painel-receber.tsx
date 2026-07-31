@@ -152,7 +152,6 @@ function CamposRecebivel({
               autoComplete="off"
               disabled={pendente}
               required
-              autoFocus
             />
           </div>
           <div>

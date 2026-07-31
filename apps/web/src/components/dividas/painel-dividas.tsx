@@ -175,7 +175,6 @@ function CamposDivida({
             autoComplete="off"
             disabled={pendente}
             required
-            autoFocus
           />
         </div>
         <div>
