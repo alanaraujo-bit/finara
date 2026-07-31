@@ -57,12 +57,21 @@ const ZONA_MORTA = 8;
 
 /**
  * Só uma gaveta aberta por vez em toda a página — abrir a segunda fecha a
- * primeira. Vive no módulo, e não num contexto, porque listas diferentes da
- * mesma tela (a receber tem duas) precisam se enxergar sem um provider comum.
- * A identidade é um objeto de ref, estável entre renders; comparar a função
- * `fechar` não serviria, porque ela nasce nova a cada render.
+ * primeira.
+ *
+ * A coordenação é um evento no `document`, e não uma variável de módulo: listas
+ * diferentes da mesma tela (a receber tem duas) precisam se enxergar sem um
+ * provider em comum, e o evento resolve isso sem estado compartilhado — cada
+ * linha só escuta enquanto está aberta e se fecha sozinha quando outra avisa
+ * que abriu. Guardar a "gaveta atual" num objeto de módulo também funcionava,
+ * mas era escrita de fora do React durante um manipulador, exatamente o que as
+ * regras `react-hooks/globals` e `react-hooks/immutability` acusam.
+ *
+ * O `detail` carrega a identidade de quem abriu: um objeto de ref, estável
+ * entre renders. Comparar a função de fechar não serviria — ela nasce nova a
+ * cada render.
  */
-let gavetaAberta: { dono: object; fechar: () => void } | null = null;
+const EVENTO_GAVETA = "finara:gaveta-abriu";
 
 type Lado = "acoes" | "principal";
 
@@ -89,6 +98,25 @@ export function LinhaDeslizante({
     useAcoes();
 
   const [aberta, setAberta] = useState<Lado | null>(null);
+
+  /**
+   * Toque num botão da gaveta.
+   *
+   * Ações que ABREM UMA FOLHA (`aoClicar` — editar, receber, ajustar saldo)
+   * precisam fechar a gaveta antes. Sem isso a folha subia com a linha ainda
+   * deslocada atrás dela, e ao fechar a folha a linha continuava aberta,
+   * esperando um toque que ninguém ia dar. Era metade da sensação de "travou e
+   * bugou": duas animações concorrentes e um estado que sobrava.
+   *
+   * Ações que EXECUTAM (`executar` — excluir, arquivar) fazem o contrário: a
+   * gaveta tem que ficar, porque é nela que aparecem a pergunta de confirmação,
+   * o estado pendente e o erro que a action devolver.
+   */
+  function tocarNaGaveta(acao: Acao) {
+    if (acao.aoClicar) fecharTudo();
+    tocar(acao);
+  }
+
   /** Pixels enquanto o dedo está na tela. `null` = parado; a posição vem do estado. */
   const [arrasto, setArrasto] = useState<number | null>(null);
 
@@ -137,43 +165,44 @@ export function LinhaDeslizante({
     Boolean(acaoPrincipal) && arrasto !== null && arrasto > larguraDireita + FOLGA_DISPARO;
 
   function abrir(lado: Lado) {
-    if (gavetaAberta && gavetaAberta.dono !== dono.current) gavetaAberta.fechar();
-    gavetaAberta = { dono: dono.current, fechar: fecharTudo };
+    // Avisa as outras linhas. Quem estiver aberto e não for eu, se fecha.
+    document.dispatchEvent(new CustomEvent(EVENTO_GAVETA, { detail: dono.current }));
     setAberta(lado);
   }
 
   function fecharTudo() {
-    if (gavetaAberta?.dono === dono.current) gavetaAberta = null;
     setAberta(null);
     cancelarConfirmacao();
     limparErro();
   }
 
-  // Toque em qualquer outro lugar da página fecha — inclusive rolagem iniciada
-  // fora da linha. Sem isto a gaveta fica aberta, esquecida atrás do conteúdo.
+  // Enquanto esta gaveta está aberta, ela escuta duas coisas: toque em
+  // qualquer outro lugar da página (incluindo rolagem iniciada fora da linha,
+  // que de outro modo deixaria a gaveta esquecida atrás do conteúdo) e o aviso
+  // de que outra linha abriu. Fechada, não escuta nada — e desmontar remove os
+  // ouvintes, então uma linha que sai da lista não deixa rastro.
   useEffect(() => {
     if (!aberta) return;
+
+    const meu = dono.current;
 
     const aoTocarFora = (evento: Event) => {
       const alvo = evento.target as Node | null;
       if (alvo && raiz.current?.contains(alvo)) return;
-      if (gavetaAberta?.dono === dono.current) gavetaAberta = null;
       setAberta(null);
     };
 
-    document.addEventListener("pointerdown", aoTocarFora, { passive: true });
-    return () => document.removeEventListener("pointerdown", aoTocarFora);
-  }, [aberta]);
-
-  // A linha pode sair da tela com a gaveta aberta (a lista se refaz depois de
-  // uma exclusão). Sem soltar o registro, a próxima linha a abrir chamaria um
-  // `fechar` de componente que não existe mais.
-  useEffect(() => {
-    const meu = dono.current;
-    return () => {
-      if (gavetaAberta?.dono === meu) gavetaAberta = null;
+    const aoOutraAbrir = (evento: Event) => {
+      if ((evento as CustomEvent).detail !== meu) setAberta(null);
     };
-  }, []);
+
+    document.addEventListener("pointerdown", aoTocarFora, { passive: true });
+    document.addEventListener(EVENTO_GAVETA, aoOutraAbrir);
+    return () => {
+      document.removeEventListener("pointerdown", aoTocarFora);
+      document.removeEventListener(EVENTO_GAVETA, aoOutraAbrir);
+    };
+  }, [aberta]);
 
   /* ---------------------------------------------------------------- gesto */
 
@@ -403,7 +432,7 @@ export function LinhaDeslizante({
                   key={acao.rotulo}
                   type="button"
                   aria-label={acao.rotulo}
-                  onClick={() => tocar(acao)}
+                  onClick={() => tocarNaGaveta(acao)}
                   className={cn(
                     "flex min-w-0 flex-col items-center justify-center gap-1 px-1",
                     "text-[10.5px] font-medium leading-none active:brightness-90",
@@ -432,7 +461,7 @@ export function LinhaDeslizante({
             <button
               type="button"
               aria-label={acaoPrincipal.rotulo}
-              onClick={() => tocar(acaoPrincipal)}
+              onClick={() => tocarNaGaveta(acaoPrincipal)}
               className={cn(
                 "flex shrink-0 flex-col items-center justify-center gap-1 px-1 text-white",
                 "text-[10.5px] font-medium leading-none transition-[width] duration-200",

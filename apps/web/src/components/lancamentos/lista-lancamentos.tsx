@@ -8,7 +8,7 @@ import {
   TrashIcon,
 } from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { memo, useCallback, useState, useTransition } from "react";
 import { excluirLancamento } from "@/app/(app)/lancamentos/actions";
 import {
   FormLancamento,
@@ -67,6 +67,18 @@ export function ListaLancamentos({
   temParceiro: boolean;
 }) {
   const [editando, setEditando] = useState<string | null>(null);
+
+  /**
+   * Estavel entre renders, e por isso o `memo` de `Linha` funciona.
+   *
+   * Sem isto, `aoEditar` nascia como uma seta nova a cada render e derrubava a
+   * memoizacao de TODAS as linhas: abrir a caixa de edicao de um lancamento
+   * re-renderizava os outros 29, com dois `useAcoes` e uma dezena de icones
+   * cada. Medido com o processador freado em 4x, isso travava a thread por
+   * 426ms — no instante exato do toque, bem antes de a animacao comecar. Era o
+   * "trava e buga antes de abrir".
+   */
+  const abrirEdicao = useCallback((id: string) => setEditando(id), []);
 
   // Agrupa por dia: no extrato, ver o total do dia importa mais que a hora.
   const porDia = new Map<string, LinhaLancamento[]>();
@@ -136,7 +148,7 @@ export function ListaLancamentos({
                   key={l.id}
                   lancamento={l}
                   atraso={Math.min(grupo * 40 + i * 20, 300)}
-                  aoEditar={() => setEditando(l.id)}
+                  aoEditar={abrirEdicao}
                 />
               ))}
             </ul>
@@ -167,14 +179,25 @@ function paraEditavel(l: LinhaLancamento, usuarioId: string): LancamentoEditavel
   };
 }
 
-function Linha({
+/**
+ * `memo` porque esta lista tem 30+ linhas e o estado que abre a caixa de edicao
+ * mora no componente de cima. Sem a memoizacao, tocar em "editar" re-renderiza
+ * a lista inteira antes de a folha aparecer — e cada linha carrega dois
+ * `useAcoes` (com `useRouter` e `useTransition`) mais os icones da gaveta e da
+ * pilula. O bloqueio media 426ms com o processador freado em 4x.
+ *
+ * As tres props sao estaveis: `lancamento` e `atraso` vem do servidor sem
+ * mudar de identidade entre renders, e `aoEditar` esta' num `useCallback`.
+ */
+const Linha = memo(function Linha({
   lancamento: l,
   atraso,
   aoEditar,
 }: {
   lancamento: LinhaLancamento;
   atraso: number;
-  aoEditar: () => void;
+  /** Recebe o id: assim a funcao e' uma so' para a lista toda. */
+  aoEditar: (id: string) => void;
 }) {
   const [escolhendoEscopo, setEscolhendoEscopo] = useState(false);
   const parcelada = Boolean(l.parcelasTotal && l.parcelasTotal > 1);
@@ -191,7 +214,7 @@ function Linha({
     {
       rotulo: "Editar lançamento",
       icone: <PencilSimpleIcon size={15} weight="bold" />,
-      aoClicar: aoEditar,
+      aoClicar: () => aoEditar(l.id),
     },
     parcelada
       ? {
@@ -296,7 +319,7 @@ function Linha({
       </div>
     </LinhaDeslizante>
   );
-}
+});
 
 /**
  * A pergunta de alcance das compras parceladas, numa folha.

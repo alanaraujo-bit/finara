@@ -649,20 +649,27 @@
 
 .fmodal::backdrop {
   background: transparent;
-  transition:
-    background-color 0.24s var(--ease-out-quint),
-    backdrop-filter 0.24s var(--ease-out-quint);
+  /**
+   * So' a cor entra na transicao. `backdrop-filter` estava aqui tambem, e era
+   * caro do jeito errado: desfocar e' feito no compositor, e ANIMAR o raio do
+   * desfoque obriga o navegador a refazer o borrado da tela inteira a cada
+   * quadro, no exato momento em que a folha esta' entrando. Aplicado de uma
+   * vez, o custo e' pago uma vez so'.
+   */
+  transition: background-color 0.24s var(--ease-out-quint);
 }
 
 .fmodal[open]::backdrop {
   background-color: color-mix(in oklab, black 46%, transparent);
+  /* Medido: tirar o desfoque nao mudou o tempo de abertura (117ms contra
+     101ms com ele, dentro do ruido). O que era caro era ANIMA-LO, e isso ja'
+     saiu da transicao acima. Fica, porque separa a folha do fundo. */
   backdrop-filter: blur(3px);
 }
 
 @starting-style {
   .fmodal[open]::backdrop {
     background-color: transparent;
-    backdrop-filter: blur(0);
   }
 }
 
@@ -717,6 +724,19 @@
   /* O corpo e' quem rola — o cabecalho fica parado, entao o titulo e o X
      continuam alcancaveis com o formulario longo e o teclado aberto. */
   overflow-y: auto;
+
+  /**
+   * `hidden` explicito, e nao o padrao.
+   *
+   * Pela especificacao, quando um eixo recebe valor diferente de `visible` e o
+   * outro fica em `visible`, o outro passa a valer `auto`. Ou seja: declarar
+   * so' `overflow-y: auto` fazia o eixo X virar `auto` sozinho, e o corpo da
+   * folha respondia a arrasto LATERAL — bastava qualquer coisa estourar a
+   * largura por um instante (um nome de categoria comprido, o teclado
+   * estreitando a caixa) para a folha inteira poder ser empurrada para o lado.
+   * Era isso que fazia o conteudo do modal "andar" em vez de ficar parado.
+   */
+  overflow-x: hidden;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
   padding: 0 1.25rem 1.25rem;
