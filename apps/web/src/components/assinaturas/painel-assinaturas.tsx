@@ -1,14 +1,8 @@
 "use client";
 
-import {
-  PauseIcon,
-  PlayIcon,
-  PlusIcon,
-  SpinnerGapIcon,
-  XIcon,
-} from "@phosphor-icons/react";
+import { PauseIcon, PlayIcon, PlusIcon, SpinnerGapIcon, XIcon } from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
-import { useActionState, useEffect, useState, useTransition } from "react";
+import { useActionState, useState, useTransition } from "react";
 import {
   alternarAssinatura,
   cancelarAssinatura,
@@ -17,6 +11,7 @@ import {
 } from "@/app/(app)/assinaturas/actions";
 import { Button } from "@/components/ui/button";
 import { FieldError, Input, Label } from "@/components/ui/input";
+import { Modal } from "@/components/ui/modal";
 import { SegmentedField, Select } from "@/components/ui/select";
 import { ROTULO_CICLO } from "@/lib/recorrencia";
 
@@ -29,45 +24,69 @@ export function FormAssinatura({
   dataPadrao: string;
   temParceiro: boolean;
 }) {
-  const router = useRouter();
   const [aberto, setAberto] = useState(false);
-  const [titularidade, setTitularidade] = useState("conjunto");
-  const [estado, acao, pendente] = useActionState<EstadoAssinatura, FormData>(
-    criarAssinatura,
-    {},
-  );
+  const [instancia, setInstancia] = useState(0);
 
-  useEffect(() => {
-    if (estado.ok) {
-      setAberto(false);
-      router.refresh();
-    }
-  }, [estado.ok, router]);
-
-  if (!aberto) {
-    return (
-      <Button size="md" className="gap-1.5" onClick={() => setAberto(true)}>
+  return (
+    <>
+      <Button
+        size="md"
+        className="gap-1.5"
+        onClick={() => {
+          setInstancia((n) => n + 1);
+          setAberto(true);
+        }}
+      >
         <PlusIcon size={16} weight="bold" />
         Nova assinatura
       </Button>
-    );
-  }
+
+      <Modal
+        aberto={aberto}
+        aoFechar={() => setAberto(false)}
+        titulo="Nova assinatura"
+        descricao="Cobrança que se repete sozinha."
+      >
+        <CamposAssinatura
+          key={instancia}
+          categorias={categorias}
+          dataPadrao={dataPadrao}
+          temParceiro={temParceiro}
+          aoConcluir={() => setAberto(false)}
+        />
+      </Modal>
+    </>
+  );
+}
+
+function CamposAssinatura({
+  categorias,
+  dataPadrao,
+  temParceiro,
+  aoConcluir,
+}: {
+  categorias: { id: string; nome: string }[];
+  dataPadrao: string;
+  temParceiro: boolean;
+  aoConcluir: () => void;
+}) {
+  const router = useRouter();
+  const [titularidade, setTitularidade] = useState("conjunto");
+
+  const [estado, acao, pendente] = useActionState<EstadoAssinatura, FormData>(
+    async (anterior, form) => {
+      const resultado = await criarAssinatura(anterior, form);
+      if (resultado.ok) {
+        aoConcluir();
+        router.refresh();
+      }
+      return resultado;
+    },
+    {},
+  );
 
   return (
-    <div className="animate-[fade-up_0.35s_var(--ease-out-quint)_both] rounded-2xl border border-border bg-surface p-5">
-      <div className="mb-4 flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-text">Nova assinatura</h3>
-        <button
-          type="button"
-          onClick={() => setAberto(false)}
-          aria-label="Cancelar"
-          className="grid size-8 place-items-center rounded-lg text-subtle transition-colors hover:bg-surface-2 hover:text-text"
-        >
-          <XIcon size={16} weight="bold" />
-        </button>
-      </div>
-
-      <form action={acao} className="space-y-4">
+    <form action={acao} className="space-y-4">
         <div className="grid gap-4 sm:grid-cols-[1.6fr_1fr]">
           <div>
             <Label htmlFor="nome">Serviço</Label>
@@ -153,20 +172,19 @@ export function FormAssinatura({
         )}
         {!temParceiro && <input type="hidden" name="titularidade" value="conjunto" />}
 
-        <FieldError>{estado.erro}</FieldError>
+      <FieldError>{estado.erro}</FieldError>
 
-        <Button type="submit" size="md" disabled={pendente} className="w-full">
-          {pendente ? (
-            <>
-              <SpinnerGapIcon size={16} className="animate-spin" />
-              Criando...
-            </>
-          ) : (
-            "Criar assinatura"
-          )}
-        </Button>
-      </form>
-    </div>
+      <Button type="submit" size="lg" disabled={pendente} className="w-full">
+        {pendente ? (
+          <>
+            <SpinnerGapIcon size={17} className="animate-spin" />
+            Criando...
+          </>
+        ) : (
+          "Criar assinatura"
+        )}
+      </Button>
+    </form>
   );
 }
 

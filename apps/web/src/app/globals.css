@@ -341,3 +341,209 @@
     padding-top: max(env(safe-area-inset-top), 0rem);
   }
 }
+
+/* ============================================================================
+   MODAL
+
+   Escrito aqui, e nao em classes utilitarias, porque `::backdrop`,
+   `@starting-style` e `transition-behavior: allow-discrete` nao existem como
+   utilitario — e sao exatamente o que faz a caixa entrar e SAIR animada em
+   vez de sumir com corte seco.
+
+   Desktop: caixa centrada. Celular: folha subindo de baixo, onde o polegar
+   alcanca.
+   ========================================================================= */
+
+.fmodal {
+  /* O UA da' margin auto e max-width/height de 'calc(100% - 6px)'; aqui o
+     dialog e' a area inteira e o painel dentro dele e' que tem tamanho. */
+  margin: 0;
+  padding: 0;
+  border: 0;
+  max-width: 100vw;
+  max-height: 100dvh;
+  width: 100vw;
+  height: 100dvh;
+  background: transparent;
+  overflow: hidden;
+
+  /* `display` e `overlay` precisam de allow-discrete: sem isso o navegador
+     tira o dialog da top layer no primeiro quadro e a saida nao anima. */
+  transition:
+    opacity 0.24s var(--ease-out-quint),
+    display 0.24s allow-discrete,
+    overlay 0.24s allow-discrete;
+  opacity: 0;
+}
+
+.fmodal[open] {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  opacity: 1;
+}
+
+@starting-style {
+  .fmodal[open] {
+    opacity: 0;
+  }
+}
+
+.fmodal::backdrop {
+  background: transparent;
+  transition:
+    background-color 0.24s var(--ease-out-quint),
+    backdrop-filter 0.24s var(--ease-out-quint);
+}
+
+.fmodal[open]::backdrop {
+  background-color: color-mix(in oklab, black 46%, transparent);
+  backdrop-filter: blur(3px);
+}
+
+@starting-style {
+  .fmodal[open]::backdrop {
+    background-color: transparent;
+    backdrop-filter: blur(0);
+  }
+}
+
+.fmodal-painel {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  /* 92dvh e nao 100: a faixa de fundo visivel acima e' o que comunica que a
+     folha e' uma camada, e nao uma tela nova. */
+  max-height: 92dvh;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-bottom: 0;
+  border-radius: var(--radius-2xl) var(--radius-2xl) 0 0;
+  box-shadow: 0 -8px 40px rgb(0 0 0 / 0.28);
+  transform: translateY(0);
+  transition: transform 0.28s var(--ease-out-quint);
+}
+
+@starting-style {
+  .fmodal[open] .fmodal-painel {
+    transform: translateY(100%);
+  }
+}
+
+/* Area de pegada do gesto de arrastar. `touch-action: none` impede o
+   navegador de interpretar o movimento como rolagem antes de nos. */
+.fmodal-arrasto {
+  display: flex;
+  justify-content: center;
+  padding: 0.625rem 0 0.125rem;
+  touch-action: none;
+  cursor: grab;
+}
+
+.fmodal-alca {
+  width: 2.25rem;
+  height: 0.25rem;
+  border-radius: 9999px;
+  background: var(--border-strong);
+}
+
+.fmodal-cabecalho {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.5rem 1.25rem 0.75rem;
+}
+
+.fmodal-corpo {
+  /* O corpo e' quem rola — o cabecalho fica parado, entao o titulo e o X
+     continuam alcancaveis com o formulario longo e o teclado aberto. */
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding: 0 1.25rem 1.25rem;
+  /* Barra de gestos do iPhone: sem isto o botao final fica embaixo dela. */
+  padding-bottom: max(1.25rem, env(safe-area-inset-bottom));
+}
+
+/* --- desktop: caixa centrada -------------------------------------------- */
+@media (min-width: 640px) {
+  .fmodal[open] {
+    align-items: center;
+  }
+
+  .fmodal-painel {
+    width: min(30rem, 100vw - 3rem);
+    max-height: min(46rem, 100dvh - 4rem);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-2xl);
+    box-shadow: 0 24px 60px rgb(0 0 0 / 0.24);
+  }
+
+  @starting-style {
+    .fmodal[open] .fmodal-painel {
+      /* No desktop a caixa cresce em vez de subir: deslizar a tela inteira
+         num monitor grande vira movimento longo demais. */
+      transform: translateY(10px) scale(0.97);
+    }
+  }
+
+  .fmodal-arrasto {
+    display: none;
+  }
+
+  .fmodal-cabecalho {
+    padding: 1.25rem 1.25rem 0.75rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fmodal,
+  .fmodal-painel,
+  .fmodal::backdrop {
+    transition-duration: 0.01ms;
+  }
+}
+
+/* ============================================================================
+   PLUGGY CONNECT
+
+   O widget chega com o tamanho dele — 320x568, com teto de 500px de largura —
+   e nao expoe prop nenhuma para mudar isso: o `wideDesktopModal` do SDK so'
+   liga se o clientId estiver numa allowlist interna do Pluggy.
+
+   Num monitor de 1080p aquilo vira uma caixinha onde a lista de instituicoes
+   nao cabe. Como so' o conteudo do iframe e' deles — o modal em volta esta' no
+   NOSSO DOM — da' pra redimensionar por CSS aqui.
+
+   O alvo tem que ser o id, e nao a classe: o widget gera um uid novo a cada
+   abertura e o prefixa em todas as classes, entao `.algo_modal` nao existe
+   como seletor estavel. O id termina sempre em `_modal`.
+   ========================================================================= */
+
+#PluggyConnect [id$="_modal"] {
+  /* 460px e' onde o layout interno deles ainda respira sem esticar. */
+  width: min(460px, calc(100vw - 2rem));
+  max-width: none;
+  /* Altura e' o que resolve a lista de bancos espremida. */
+  height: min(760px, calc(100dvh - 3rem));
+  max-height: none;
+  border-radius: var(--radius-lg);
+}
+
+#PluggyConnect [id$="_modal-overlay"] {
+  /* O preto puro do widget destoa; este acompanha o tema. */
+  background: color-mix(in oklab, var(--canvas) 78%, transparent);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+}
+
+/* No celular o widget ja' ocupa a tela toda por conta propria (allowFullscreen),
+   e nossa altura fixa atrapalharia. */
+@media screen and (max-width: 500px) {
+  #PluggyConnect [id$="_modal"] {
+    width: 100%;
+    height: 100%;
+    border-radius: 0;
+  }
+}

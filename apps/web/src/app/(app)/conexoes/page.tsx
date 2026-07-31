@@ -1,5 +1,5 @@
 import { db, desc, eq, openFinanceConnections } from "@finara/db";
-import { PlugsConnectedIcon, WarningIcon } from "@phosphor-icons/react/dist/ssr";
+import { InfoIcon, PlugsConnectedIcon } from "@phosphor-icons/react/dist/ssr";
 import type { Metadata } from "next";
 import { ConectarBanco } from "@/components/openfinance/conectar-banco";
 import { Badge } from "@/components/ui/badge";
@@ -94,12 +94,12 @@ export default async function ConexoesPage() {
 
           <ConectarBanco incluirSandbox={incluirSandbox} />
 
-          <div className="mt-5 flex gap-2.5 rounded-xl border border-border bg-warning-soft/40 p-3">
-            <WarningIcon size={16} weight="duotone" className="mt-0.5 shrink-0 text-warning" />
+          <div className="mt-5 flex gap-2.5 rounded-xl border border-border bg-surface-2/50 p-3">
+            <InfoIcon size={16} weight="duotone" className="mt-0.5 shrink-0 text-info" />
             <p className="text-[12.5px] leading-relaxed text-muted">
-              A importação de lançamentos ainda não roda — ela pertence ao worker no Railway, que
-              não existe. Por ora a conexão é registrada e o status acompanhado, mas nenhuma
-              transação é criada automaticamente.
+              Depois de autorizar, o banco avisa o Pluggy e o Pluggy avisa o Finara — a importação
+              roda fora desta tela e leva alguns minutos. Atualize a página para ver a data da
+              última sincronização mudar.
             </p>
           </div>
         </CardContent>

@@ -45,9 +45,11 @@ export async function registrarConexao(itemId: string): Promise<ResultadoRegistr
     institutionLogoUrl: item.connector?.imageUrl ?? null,
     status: "active" as const,
     statusDetail: null,
-    lastSyncedAt: new Date(),
     updatedAt: new Date(),
   };
+  // `lastSyncedAt` fica de fora de proposito: quem sincroniza e' o worker, e
+  // carimbar a data aqui faria a tela dizer "Sincronizado agora" antes de um
+  // unico lancamento ter sido importado.
 
   if (existente) {
     await db

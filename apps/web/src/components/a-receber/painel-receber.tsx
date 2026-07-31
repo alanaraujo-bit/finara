@@ -1,51 +1,73 @@
 "use client";
 
-import { CheckIcon, PlusIcon, SpinnerGapIcon, XIcon } from "@phosphor-icons/react";
+import { CheckIcon, PlusIcon, SpinnerGapIcon } from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
-import { useActionState, useEffect, useState, useTransition } from "react";
+import { useActionState, useState, useTransition } from "react";
 import { criarRecebivel, receber, type EstadoReceber } from "@/app/(app)/a-receber/actions";
 import { Button } from "@/components/ui/button";
 import { FieldError, Input, Label } from "@/components/ui/input";
+import { Modal } from "@/components/ui/modal";
 import { SegmentedField, Select } from "@/components/ui/select";
 import { formatMoney } from "@/lib/money";
 
 export function FormRecebivel({ temParceiro }: { temParceiro: boolean }) {
-  const router = useRouter();
   const [aberto, setAberto] = useState(false);
-  const [titularidade, setTitularidade] = useState("conjunto");
-  const [estado, acao, pendente] = useActionState<EstadoReceber, FormData>(criarRecebivel, {});
+  const [instancia, setInstancia] = useState(0);
 
-  useEffect(() => {
-    if (estado.ok) {
-      setAberto(false);
-      router.refresh();
-    }
-  }, [estado.ok, router]);
-
-  if (!aberto) {
-    return (
-      <Button size="md" className="gap-1.5" onClick={() => setAberto(true)}>
+  return (
+    <>
+      <Button
+        size="md"
+        className="gap-1.5"
+        onClick={() => {
+          setInstancia((n) => n + 1);
+          setAberto(true);
+        }}
+      >
         <PlusIcon size={16} weight="bold" />
         Novo recebível
       </Button>
-    );
-  }
+
+      <Modal
+        aberto={aberto}
+        aoFechar={() => setAberto(false)}
+        titulo="Novo recebível"
+        descricao="Dinheiro que ainda vai entrar."
+      >
+        <CamposRecebivel
+          key={instancia}
+          temParceiro={temParceiro}
+          aoConcluir={() => setAberto(false)}
+        />
+      </Modal>
+    </>
+  );
+}
+
+function CamposRecebivel({
+  temParceiro,
+  aoConcluir,
+}: {
+  temParceiro: boolean;
+  aoConcluir: () => void;
+}) {
+  const router = useRouter();
+  const [titularidade, setTitularidade] = useState("conjunto");
+
+  const [estado, acao, pendente] = useActionState<EstadoReceber, FormData>(
+    async (anterior, form) => {
+      const resultado = await criarRecebivel(anterior, form);
+      if (resultado.ok) {
+        aoConcluir();
+        router.refresh();
+      }
+      return resultado;
+    },
+    {},
+  );
 
   return (
-    <div className="animate-[fade-up_0.35s_var(--ease-out-quint)_both] rounded-2xl border border-border bg-surface p-5">
-      <div className="mb-4 flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-text">Novo recebível</h3>
-        <button
-          type="button"
-          onClick={() => setAberto(false)}
-          aria-label="Cancelar"
-          className="grid size-8 place-items-center rounded-lg text-subtle transition-colors hover:bg-surface-2 hover:text-text"
-        >
-          <XIcon size={16} weight="bold" />
-        </button>
-      </div>
-
-      <form action={acao} className="space-y-4">
+    <form action={acao} className="space-y-4">
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
             <Label htmlFor="nome">O que é</Label>
@@ -112,20 +134,19 @@ export function FormRecebivel({ temParceiro }: { temParceiro: boolean }) {
         )}
         {!temParceiro && <input type="hidden" name="titularidade" value="conjunto" />}
 
-        <FieldError>{estado.erro}</FieldError>
+      <FieldError>{estado.erro}</FieldError>
 
-        <Button type="submit" size="md" disabled={pendente} className="w-full">
-          {pendente ? (
-            <>
-              <SpinnerGapIcon size={16} className="animate-spin" />
-              Criando...
-            </>
-          ) : (
-            "Criar recebível"
-          )}
-        </Button>
-      </form>
-    </div>
+      <Button type="submit" size="lg" disabled={pendente} className="w-full">
+        {pendente ? (
+          <>
+            <SpinnerGapIcon size={17} className="animate-spin" />
+            Criando...
+          </>
+        ) : (
+          "Criar recebível"
+        )}
+      </Button>
+    </form>
   );
 }
 

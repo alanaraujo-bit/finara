@@ -2,19 +2,28 @@
 
 import { MoonStarsIcon, SunIcon } from "@phosphor-icons/react";
 import { useTheme } from "next-themes";
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 import { cn } from "@/lib/utils";
 
+/** Nunca notifica: o valor so' precisa diferir entre servidor e cliente. */
+const semInscricao = () => () => {};
+
 /**
- * Alterna claro/escuro. O `mounted` evita o descompasso de hidratacao:
- * no servidor nao da' pra saber o tema salvo, entao renderizamos um
- * placeholder do mesmo tamanho ate' montar — sem pulo de layout.
+ * Alterna claro/escuro. O `montado` evita o descompasso de hidratacao: no
+ * servidor nao da' pra saber o tema salvo, entao renderizamos um placeholder
+ * do mesmo tamanho ate' montar — sem pulo de layout.
+ *
+ * `useSyncExternalStore` em vez de `useState` + efeito: e' a forma que o React
+ * oferece para um valor que difere entre servidor e cliente, e nao gera o
+ * render em cascata que um setState dentro de efeito provoca.
  */
 export function ThemeToggle({ className }: { className?: string }) {
   const { resolvedTheme, setTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => setMounted(true), []);
+  const montado = useSyncExternalStore(
+    semInscricao,
+    () => true,
+    () => false,
+  );
 
   const isDark = resolvedTheme === "dark";
 
@@ -23,7 +32,7 @@ export function ThemeToggle({ className }: { className?: string }) {
       type="button"
       // O rotulo tambem depende do tema, entao precisa do mesmo guard do icone:
       // no servidor `resolvedTheme` e' undefined e o texto divergiria na hidratacao.
-      aria-label={!mounted ? "Alternar tema" : isDark ? "Ativar tema claro" : "Ativar tema escuro"}
+      aria-label={!montado ? "Alternar tema" : isDark ? "Ativar tema claro" : "Ativar tema escuro"}
       onClick={() => setTheme(isDark ? "light" : "dark")}
       className={cn(
         "relative grid size-9 place-items-center rounded-lg text-muted",
@@ -31,7 +40,7 @@ export function ThemeToggle({ className }: { className?: string }) {
         className,
       )}
     >
-      {mounted ? (
+      {montado ? (
         <span key={resolvedTheme} className="animate-[fade-in_0.2s_ease-out]">
           {isDark ? (
             <MoonStarsIcon size={18} weight="duotone" />

@@ -1,6 +1,6 @@
 "use client";
 
-import { PlusIcon, SignOutIcon } from "@phosphor-icons/react";
+import { DotsThreeOutlineIcon, PlusIcon, SignOutIcon } from "@phosphor-icons/react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState, type ReactNode } from "react";
@@ -169,7 +169,7 @@ function MobileNav() {
           <MobileNavItem key={item.href} item={item} active={isActive(pathname, item.href)} />
         ))}
         <MobileNavItem
-          item={{ href: "/mais", label: "Mais", icon: navigation[2]!.items[2]!.icon }}
+          item={{ href: "/mais", label: "Mais", icon: DotsThreeOutlineIcon }}
           active={isActive(pathname, "/mais")}
         />
       </ul>

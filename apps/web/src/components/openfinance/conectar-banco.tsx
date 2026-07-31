@@ -5,9 +5,11 @@ import dynamic from "next/dynamic";
 import { useTheme } from "next-themes";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import { registrarConexao } from "@/app/(app)/conexoes/actions";
 import { Button } from "@/components/ui/button";
 import { FieldError } from "@/components/ui/input";
+import { traduzirErroPluggy } from "@/lib/erros-pluggy";
 
 /**
  * Carregado dinamicamente com `ssr: false` porque o `react-pluggy-connect`
@@ -80,29 +82,43 @@ export function ConectarBanco({ incluirSandbox }: { incluirSandbox: boolean }) {
 
       <FieldError>{erro}</FieldError>
 
-      {token && (
-        <PluggyConnect
-          connectToken={token}
-          includeSandbox={incluirSandbox}
-          language="pt"
-          theme={resolvedTheme === "dark" ? "dark" : "light"}
-          onSuccess={async (dados) => {
-            const resultado = await registrarConexao(dados.item.id);
-            setToken(null);
+      {/*
+        Montado no `body`, e nao aqui dentro.
 
-            if (!resultado.ok) {
-              setErro(resultado.erro);
-              return;
-            }
-            router.refresh();
-          }}
-          onError={(erroWidget) => {
-            setToken(null);
-            setErro(erroWidget.message || "A conexão com o banco falhou.");
-          }}
-          onClose={() => setToken(null)}
-        />
-      )}
+        O `react-pluggy-connect` renderiza uma `<div id="PluggyConnect">` e
+        manda o SDK desenhar o modal DENTRO dela — diferente do SDK puro, que
+        cai no `body` quando nao recebe container. Preso no meio do card, o
+        overlay `position: fixed` fica a merce' de qualquer ancestral que crie
+        bloco de contencao (transform, filter, backdrop-filter) e o modal
+        aparece espremido num pedaco da tela em vez de centralizado.
+
+        O portal devolve o widget para onde ele espera estar.
+      */}
+      {token &&
+        createPortal(
+          <PluggyConnect
+            connectToken={token}
+            includeSandbox={incluirSandbox}
+            language="pt"
+            theme={resolvedTheme === "dark" ? "dark" : "light"}
+            onSuccess={async (dados) => {
+              const resultado = await registrarConexao(dados.item.id);
+              setToken(null);
+
+              if (!resultado.ok) {
+                setErro(resultado.erro);
+                return;
+              }
+              router.refresh();
+            }}
+            onError={(erroWidget) => {
+              setToken(null);
+              setErro(traduzirErroPluggy(erroWidget.message));
+            }}
+            onClose={() => setToken(null)}
+          />,
+          document.body,
+        )}
     </>
   );
 }

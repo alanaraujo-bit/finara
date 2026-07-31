@@ -1,11 +1,12 @@
 "use client";
 
-import { CheckIcon, PlusIcon, SpinnerGapIcon, XIcon } from "@phosphor-icons/react";
+import { CheckIcon, PlusIcon, SpinnerGapIcon } from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
-import { useActionState, useEffect, useState, useTransition } from "react";
+import { useActionState, useState, useTransition } from "react";
 import { criarDivida, pagarParcela, type EstadoDivida } from "@/app/(app)/dividas/actions";
 import { Button } from "@/components/ui/button";
 import { FieldError, Input, Label } from "@/components/ui/input";
+import { Modal } from "@/components/ui/modal";
 import { SegmentedField, Select } from "@/components/ui/select";
 import { formatMoney, parseMoney } from "@/lib/money";
 
@@ -16,28 +17,65 @@ export function FormDivida({
   dataPadrao: string;
   temParceiro: boolean;
 }) {
-  const router = useRouter();
   const [aberto, setAberto] = useState(false);
-  const [titularidade, setTitularidade] = useState("conjunto");
-  const [total, setTotal] = useState("");
-  const [parcelas, setParcelas] = useState("1");
-  const [estado, acao, pendente] = useActionState<EstadoDivida, FormData>(criarDivida, {});
+  const [instancia, setInstancia] = useState(0);
 
-  useEffect(() => {
-    if (estado.ok) {
-      setAberto(false);
-      router.refresh();
-    }
-  }, [estado.ok, router]);
-
-  if (!aberto) {
-    return (
-      <Button size="md" className="gap-1.5" onClick={() => setAberto(true)}>
+  return (
+    <>
+      <Button
+        size="md"
+        className="gap-1.5"
+        onClick={() => {
+          setInstancia((n) => n + 1);
+          setAberto(true);
+        }}
+      >
         <PlusIcon size={16} weight="bold" />
         Nova dívida
       </Button>
-    );
-  }
+
+      <Modal
+        aberto={aberto}
+        aoFechar={() => setAberto(false)}
+        titulo="Nova dívida"
+        descricao="O total vira parcelas com vencimento."
+      >
+        <CamposDivida
+          key={instancia}
+          dataPadrao={dataPadrao}
+          temParceiro={temParceiro}
+          aoConcluir={() => setAberto(false)}
+        />
+      </Modal>
+    </>
+  );
+}
+
+function CamposDivida({
+  dataPadrao,
+  temParceiro,
+  aoConcluir,
+}: {
+  dataPadrao: string;
+  temParceiro: boolean;
+  aoConcluir: () => void;
+}) {
+  const router = useRouter();
+  const [titularidade, setTitularidade] = useState("conjunto");
+  const [total, setTotal] = useState("");
+  const [parcelas, setParcelas] = useState("1");
+
+  const [estado, acao, pendente] = useActionState<EstadoDivida, FormData>(
+    async (anterior, form) => {
+      const resultado = await criarDivida(anterior, form);
+      if (resultado.ok) {
+        aoConcluir();
+        router.refresh();
+      }
+      return resultado;
+    },
+    {},
+  );
 
   // Previa do valor da parcela: ver "12x de R$ 250,00" antes de salvar evita
   // o erro de digitar o valor da parcela no lugar do total.
@@ -46,20 +84,7 @@ export function FormDivida({
   const porParcela = centavos > 0 ? Math.floor(centavos / n) : 0;
 
   return (
-    <div className="animate-[fade-up_0.35s_var(--ease-out-quint)_both] rounded-2xl border border-border bg-surface p-5">
-      <div className="mb-4 flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-text">Nova dívida</h3>
-        <button
-          type="button"
-          onClick={() => setAberto(false)}
-          aria-label="Cancelar"
-          className="grid size-8 place-items-center rounded-lg text-subtle transition-colors hover:bg-surface-2 hover:text-text"
-        >
-          <XIcon size={16} weight="bold" />
-        </button>
-      </div>
-
-      <form action={acao} className="space-y-4">
+    <form action={acao} className="space-y-4">
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
             <Label htmlFor="nome">O que é</Label>
@@ -158,20 +183,19 @@ export function FormDivida({
         )}
         {!temParceiro && <input type="hidden" name="titularidade" value="conjunto" />}
 
-        <FieldError>{estado.erro}</FieldError>
+      <FieldError>{estado.erro}</FieldError>
 
-        <Button type="submit" size="md" disabled={pendente} className="w-full">
-          {pendente ? (
-            <>
-              <SpinnerGapIcon size={16} className="animate-spin" />
-              Criando...
-            </>
-          ) : (
-            "Criar dívida"
-          )}
-        </Button>
-      </form>
-    </div>
+      <Button type="submit" size="lg" disabled={pendente} className="w-full">
+        {pendente ? (
+          <>
+            <SpinnerGapIcon size={17} className="animate-spin" />
+            Criando...
+          </>
+        ) : (
+          "Criar dívida"
+        )}
+      </Button>
+    </form>
   );
 }
 
