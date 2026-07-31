@@ -334,6 +334,7 @@ export function LinhaAssinatura({
           perigo: true,
           confirmar: "Excluir?",
           executar: () => excluirAssinatura(id),
+          removeALinha: true,
         },
       ]}
     >

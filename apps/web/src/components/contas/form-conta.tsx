@@ -313,6 +313,7 @@ export function LinhaConta({
                 perigo: true,
                 confirmar: "Excluir?",
                 executar: () => excluirConta(conta.id),
+                removeALinha: true,
               } satisfies Acao,
             ]),
       ]}

@@ -20,6 +20,7 @@ import { CardContent } from "@/components/ui/card";
 import { Carregando } from "@/components/ui/carregando";
 import { LinhaDeslizante } from "@/components/ui/linha-deslizante";
 import { Modal } from "@/components/ui/modal";
+import { ValorAnimado } from "@/components/ui/valor-animado";
 import { rotuloData } from "@/lib/datas";
 import { formatMoney } from "@/lib/money";
 import { TATO, vibrar } from "@/lib/tato";
@@ -69,6 +70,25 @@ export function ListaLancamentos({
   const [editando, setEditando] = useState<string | null>(null);
 
   /**
+   * Id da linha que acabou de ser salva, para ela se acender por um instante.
+   *
+   * Salvar fecha a folha e devolve a pessoa a uma lista onde UM numero mudou.
+   * Sem marcar qual, conferir o resultado da propria edicao vira procurar —
+   * ainda mais no extrato, onde as linhas sao parecidas de proposito.
+   *
+   * O tempo aqui e' maior que a animacao (1.3s) porque ele so' precisa passar
+   * DEPOIS que ela termina: e' o que permite editar a mesma linha duas vezes
+   * seguidas e ver o realce nas duas. Enquanto a classe fica no elemento, o
+   * navegador nao roda a animacao de novo.
+   */
+  const [destacado, setDestacado] = useState<string | null>(null);
+
+  const marcarSalvo = useCallback((id: string) => {
+    setDestacado(id);
+    setTimeout(() => setDestacado((atual) => (atual === id ? null : atual)), 1600);
+  }, []);
+
+  /**
    * Estavel entre renders, e por isso o `memo` de `Linha` funciona.
    *
    * Sem isto, `aoEditar` nascia como uma seta nova a cada render e derrubava a
@@ -113,7 +133,9 @@ export function ListaLancamentos({
             categorias={categorias}
             dataPadrao={hoje}
             temParceiro={temParceiro}
-            aoConcluir={() => setEditando(null)}
+            // Nao fecha mais a folha — quem fecha e' ela mesma, animada.
+            // Aqui so' se registra QUAL linha mudou.
+            aoConcluir={() => marcarSalvo(alvo.id)}
             lancamento={paraEditavel(alvo, usuarioId)}
           />
         </Modal>
@@ -131,6 +153,11 @@ export function ListaLancamentos({
               <span className="text-[12px] font-semibold uppercase tracking-wide text-subtle">
                 {rotuloData(dia, hoje)}
               </span>
+              {/* O total do dia e' o numero que muda DEBAIXO do olho de quem
+                  acabou de salvar uma edicao — a tela nao troca, a folha
+                  desce e ele fica ali. E' o lugar em que contar ate' o valor
+                  novo tem informacao: liga a linha que acendeu ao total que
+                  se mexeu. */}
               <span
                 className={cn(
                   "tabular text-[12.5px] font-medium",
@@ -138,7 +165,7 @@ export function ListaLancamentos({
                 )}
               >
                 {totalDia >= 0 ? "+" : "−"}
-                {formatMoney(Math.abs(totalDia))}
+                <ValorAnimado valor={Math.abs(totalDia)} />
               </span>
             </div>
 
@@ -149,6 +176,9 @@ export function ListaLancamentos({
                   lancamento={l}
                   atraso={Math.min(grupo * 40 + i * 20, 300)}
                   aoEditar={abrirEdicao}
+                  // Booleano, e nao o id: assim as outras 29 linhas continuam
+                  // recebendo `false` e o `memo` delas segue valendo.
+                  destacada={l.id === destacado}
                 />
               ))}
             </ul>
@@ -193,11 +223,14 @@ const Linha = memo(function Linha({
   lancamento: l,
   atraso,
   aoEditar,
+  destacada,
 }: {
   lancamento: LinhaLancamento;
   atraso: number;
   /** Recebe o id: assim a funcao e' uma so' para a lista toda. */
   aoEditar: (id: string) => void;
+  /** Acabou de ser salva: acende por um instante. */
+  destacada: boolean;
 }) {
   const [escolhendoEscopo, setEscolhendoEscopo] = useState(false);
   const parcelada = Boolean(l.parcelasTotal && l.parcelasTotal > 1);
@@ -233,6 +266,7 @@ const Linha = memo(function Linha({
           perigo: true,
           confirmar: "Excluir?",
           executar: () => excluirLancamento(l.id, "uma"),
+          removeALinha: true,
         },
   ];
 
@@ -255,7 +289,12 @@ const Linha = memo(function Linha({
       {/* Sem tinta de hover: quem responde ao ponteiro agora é a pílula de
           ações, e um fundo que muda por baixo dela deixaria o degradê da
           pílula (que é `--surface`) visível como uma faixa de cor errada. */}
-      <div className="flex items-center gap-3 bg-surface px-5 py-3">
+      <div
+        className={cn(
+          "flex items-center gap-3 bg-surface px-5 py-3",
+          destacada && "linha-destaque",
+        )}
+      >
       <span
         className={cn(
           "grid size-9 shrink-0 place-items-center rounded-full",

@@ -47,9 +47,29 @@ export type Acao = {
   /** Pergunta curta antes de executar. Ex: "Excluir?" */
   confirmar?: string;
 } & (
-  | { aoClicar: () => void; executar?: never }
-  | { executar: () => Promise<{ erro?: string } | void>; aoClicar?: never }
+  | { aoClicar: () => void; executar?: never; removeALinha?: never }
+  | {
+      executar: () => Promise<{ erro?: string } | void>;
+      aoClicar?: never;
+      /**
+       * A linha DEIXA a lista quando isto der certo — e' o caso de excluir.
+       *
+       * Existe porque nem toda acao que executa remove: desfazer um
+       * recebimento, restaurar uma categoria e ajustar um saldo mudam a linha
+       * e a mantem no lugar. Animar a saida delas seria mentir sobre o que
+       * aconteceu, e a linha piscaria de volta logo em seguida.
+       */
+      removeALinha?: boolean;
+    }
 );
+
+/**
+ * Quanto tempo a linha leva para dobrar e sumir. Precisa bater com a duracao
+ * de `linha-sai` no CSS: e' este numero que segura o `router.refresh()` ate'
+ * a animacao terminar. Curto demais e o servidor devolve a lista sem a linha
+ * no meio do movimento; longo demais e a lista fica velha na tela.
+ */
+export const SAIDA_LINHA_MS = 260;
 
 /**
  * A máquina de estados que as duas formas compartilham.
@@ -59,7 +79,14 @@ export type Acao = {
  * não pode ser engolido, o pendente que impede o toque duplo virar duas
  * exclusões. Desenho é o que difere entre celular e desktop — isto não.
  */
-export function useAcoes() {
+export function useAcoes(opcoes?: {
+  /**
+   * Chamado quando uma acao marcada com `removeALinha` deu certo, ANTES de
+   * buscar a lista nova. E' a janela em que quem desenha a linha a faz dobrar
+   * — a maquina de estados nao conhece o elemento, so' avisa a hora.
+   */
+  aoRemover?: () => void;
+}) {
   const router = useRouter();
   const [pendente, iniciar] = useTransition();
   const [confirmando, setConfirmando] = useState<Acao | null>(null);
@@ -86,10 +113,25 @@ export function useAcoes() {
       const r = await acao.executar!();
       if (r?.erro) {
         setErro(r.erro);
-      } else {
-        vibrar(TATO.concluido);
-        router.refresh();
+        return;
       }
+      vibrar(TATO.concluido);
+
+      /**
+       * A linha dobra ANTES de a lista nova chegar.
+       *
+       * `router.refresh()` devolve o extrato ja' sem o registro, e o React
+       * tira o `<li>` do DOM no mesmo commit — nao sobra elemento para
+       * animar, e a linha de baixo salta para o lugar. E' o mesmo desenho do
+       * corte seco das folhas: quem executa a acao tem que esperar a saida,
+       * nao competir com ela.
+       */
+      if (acao.removeALinha && opcoes?.aoRemover) {
+        opcoes.aoRemover();
+        await new Promise((pronto) => setTimeout(pronto, SAIDA_LINHA_MS));
+      }
+
+      router.refresh();
     });
   }
 
@@ -115,6 +157,7 @@ export function AcoesLinha({
   acoes,
   className,
   sempreVisivel = false,
+  aoRemover,
 }: {
   acoes: Acao[];
   className?: string;
@@ -124,9 +167,15 @@ export function AcoesLinha({
    * ou quando a ação é a única coisa na linha e esconder não faria sentido.
    */
   sempreVisivel?: boolean;
+  /**
+   * Repassado ao `useAcoes` daqui. Esta forma tem a PROPRIA maquina de
+   * estados (ver o comentario em `LinhaDeslizante` sobre por que sao duas),
+   * entao sem isto a linha dobraria no celular e sumiria seca no desktop.
+   */
+  aoRemover?: () => void;
 }) {
   const { pendente, confirmando, erro, tocar, disparar, limparErro, cancelarConfirmacao } =
-    useAcoes();
+    useAcoes({ aoRemover });
 
   if (erro) {
     return (

@@ -368,6 +368,7 @@ export function LinhaCartao({
                 perigo: true,
                 confirmar: "Excluir?",
                 executar: () => excluirCartao(cartao.id),
+                removeALinha: true,
               } satisfies Acao,
             ]),
       ]}

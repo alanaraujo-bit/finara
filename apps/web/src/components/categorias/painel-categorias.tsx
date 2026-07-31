@@ -195,6 +195,7 @@ function Linha({
                 perigo: true,
                 confirmar: "Excluir?",
                 executar: () => excluirCategoria(c.id),
+                removeALinha: true,
               } satisfies Acao,
             ]
           : []),

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type PointerEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type PointerEvent, type ReactNode } from "react";
 import { AcoesLinha, useAcoes, type Acao } from "@/components/ui/acoes-linha";
 import { Carregando } from "@/components/ui/carregando";
 import { TATO, vibrar } from "@/lib/tato";
@@ -94,8 +94,35 @@ export function LinhaDeslizante({
   as?: "li" | "div";
   style?: React.CSSProperties;
 }) {
+  const raiz = useRef<HTMLElement>(null);
+
+  /** A linha esta' dobrando para sair da lista. */
+  const [saindo, setSaindo] = useState(false);
+
+  /**
+   * Congela a altura ATUAL da linha num custom property, e so' entao deixa a
+   * animacao rodar.
+   *
+   * `height: auto` nao e' animavel: sem um valor de partida concreto o
+   * navegador salta direto para zero. E a altura nao pode ser constante no
+   * CSS porque linha nenhuma aqui tem altura fixa — uma descricao que quebra
+   * em duas linhas ja' muda tudo, e o extrato, as contas e as dividas usam o
+   * mesmo componente com desenhos diferentes.
+   *
+   * A leitura de `offsetHeight` acontece aqui, num manipulador, e nao durante
+   * o render — medir o DOM enquanto se renderiza le' um layout que ainda pode
+   * mudar, e e' o que as regras de imutabilidade do React acusam.
+   */
+  const aoRemover = useCallback(() => {
+    const elemento = raiz.current;
+    if (elemento) {
+      elemento.style.setProperty("--altura-linha", `${elemento.offsetHeight}px`);
+    }
+    setSaindo(true);
+  }, []);
+
   const { pendente, confirmando, erro, tocar, disparar, limparErro, cancelarConfirmacao } =
-    useAcoes();
+    useAcoes({ aoRemover });
 
   const [aberta, setAberta] = useState<Lado | null>(null);
 
@@ -120,7 +147,6 @@ export function LinhaDeslizante({
   /** Pixels enquanto o dedo está na tela. `null` = parado; a posição vem do estado. */
   const [arrasto, setArrasto] = useState<number | null>(null);
 
-  const raiz = useRef<HTMLElement>(null);
   const dono = useRef({});
   const inicio = useRef({ x: 0, y: 0 });
   /**
@@ -321,7 +347,14 @@ export function LinhaDeslizante({
   return (
     <Tag
       ref={raiz as never}
-      className={cn("group/linha relative isolate overflow-hidden", className)}
+      className={cn(
+        "group/linha relative isolate overflow-hidden",
+        // Enquanto dobra, a linha nao recebe mais toque: ela ja' nao existe
+        // do ponto de vista do dado, e um segundo toque na mesma acao
+        // dispararia a action de novo sobre um registro apagado.
+        saindo && "linha-saindo",
+        className,
+      )}
       style={style}
       data-gaveta={aberta ?? undefined}
     >
@@ -359,6 +392,7 @@ export function LinhaDeslizante({
           <AcoesLinha
             acoes={acaoPrincipal ? [acaoPrincipal, ...acoes] : acoes}
             sempreVisivel
+            aoRemover={aoRemover}
           />
         </div>
       </div>

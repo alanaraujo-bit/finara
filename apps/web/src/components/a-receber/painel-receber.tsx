@@ -373,6 +373,7 @@ export function LinhaRecebivel({
           perigo: true,
           confirmar: "Excluir?",
           executar: () => excluirRecebivel(recebivel.id),
+          removeALinha: true,
         },
       ]}
     >

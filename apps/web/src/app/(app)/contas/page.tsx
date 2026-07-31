@@ -5,7 +5,7 @@ import { FormConta, LinhaConta } from "@/components/contas/form-conta";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
-import { formatMoney } from "@/lib/money";
+import { ValorAnimado } from "@/components/ui/valor-animado";
 import { listarContas, listarMembrosSimples } from "@/lib/queries/contas";
 import { exigirSessao } from "@/lib/session";
 import { cn } from "@/lib/utils";
@@ -65,7 +65,7 @@ export default async function ContasPage() {
             ) : (
               <>
                 {contas.length} {contas.length === 1 ? "conta" : "contas"} ·{" "}
-                <span className="tabular font-medium text-text">{formatMoney(total)}</span>
+                <ValorAnimado valor={total} className="tabular font-medium text-text" />
               </>
             )}
           </p>
@@ -136,14 +136,16 @@ export default async function ContasPage() {
                       {c.institution ? ` · ${c.institution}` : ""}
                     </p>
 
-                    <p
+                    {/* Ajustar o saldo acontece numa folha SOBRE esta tela:
+                        a lista nao troca, a folha desce e o numero muda ali.
+                        E' onde contar carrega informacao. */}
+                    <ValorAnimado
+                      valor={c.currentBalance}
                       className={cn(
-                        "tabular mt-2.5 text-[19px] font-semibold",
+                        "tabular mt-2.5 block text-[19px] font-semibold",
                         c.currentBalance < 0 ? "text-expense" : "text-text",
                       )}
-                    >
-                      {formatMoney(c.currentBalance)}
-                    </p>
+                    />
                   </div>
                 </CardContent>
               </Card>

@@ -17,6 +17,7 @@ import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
+import { ValorAnimado } from "@/components/ui/valor-animado";
 import { nomeDoMes, paraDataLocal, rotuloData } from "@/lib/datas";
 import { formatMoney, formatPercent, splitMoney } from "@/lib/money";
 import {
@@ -483,7 +484,7 @@ function MiniStat({
         <span className={tone === "income" ? "text-income" : "text-expense"}>{icon}</span>
         {label}
       </p>
-      <p className="tabular mt-1 text-[17px] font-semibold text-text">{formatMoney(value)}</p>
+      <ValorAnimado valor={value} className="tabular mt-1 block text-[17px] font-semibold text-text" />
     </div>
   );
 }
@@ -519,9 +520,10 @@ function StatCard({
         </span>
         <div className="min-w-0">
           <p className="text-[13px] font-medium text-muted">{label}</p>
-          <p className="tabular mt-0.5 text-[22px] font-semibold leading-tight text-text">
-            {formatMoney(value)}
-          </p>
+          <ValorAnimado
+            valor={value}
+            className="tabular mt-0.5 block text-[22px] font-semibold leading-tight text-text"
+          />
           <p className="mt-0.5 text-[11.5px] text-subtle">{hint}</p>
         </div>
       </CardContent>

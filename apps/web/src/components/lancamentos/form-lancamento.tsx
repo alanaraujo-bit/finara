@@ -94,11 +94,14 @@ export function FormLancamento({
         // fechamento: confirma no dedo no instante em que deu certo, sem
         // esperar a folha terminar de descer.
         vibrar(TATO.concluido);
-        // Dentro de uma folha, concluir E' fechar — e o fechamento da folha
-        // tem animacao de saida. Chamar `aoConcluir` aqui arrancaria a caixa
-        // do DOM no mesmo quadro, que era o corte seco ao salvar.
-        if (fecharFolha) fecharFolha();
-        else aoConcluir?.();
+        // Avisa quem esta' de fora que DEU CERTO — e' o que permite a lista
+        // marcar a linha que acabou de mudar. Nao e' mais "feche a caixa":
+        // fechar virou responsabilidade da folha, logo abaixo.
+        aoConcluir?.();
+        // Dentro de uma folha, concluir tambem E' fechar — e o fechamento da
+        // folha tem animacao de saida. Fora dela (`/lancamentos/novo`), quem
+        // termina o fluxo e' a navegacao no efeito la' embaixo.
+        fecharFolha?.();
         router.refresh();
       }
       return r;

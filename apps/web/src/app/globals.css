@@ -235,6 +235,67 @@
 }
 
 /* ============================================================================
+   LINHA QUE SAI DA LISTA
+
+   Excluir devolvia a lista nova e o `<li>` sumia entre dois quadros: a linha
+   de baixo saltava para o lugar e nada dizia qual das duas tinha ido embora —
+   num extrato de linhas parecidas, sobra a duvida de ter apagado a errada.
+
+   Dobrar resolve isso sem custar tempo: o registro se fecha sobre si mesmo e
+   as linhas de baixo ACOMPANHAM o fechamento em vez de saltar. A duracao aqui
+   e' a mesma de `SAIDA_LINHA_MS` em `acoes-linha.tsx`, que segura a busca da
+   lista nova ate' isto terminar.
+
+   A altura de partida vem de `--altura-linha`, medida no momento do toque:
+   `height: auto` nao anima — sem um valor concreto o navegador salta direto
+   para zero — e nenhuma linha aqui tem altura fixa.
+   ========================================================================= */
+
+.linha-saindo {
+  animation: linha-sai 0.26s var(--ease-out-quint) both;
+  overflow: hidden;
+  /* Ja' foi: um segundo toque dispararia a action sobre registro apagado. */
+  pointer-events: none;
+}
+
+@keyframes linha-sai {
+  from {
+    height: var(--altura-linha);
+    opacity: 1;
+  }
+  to {
+    height: 0;
+    opacity: 0;
+  }
+}
+
+/* ============================================================================
+   LINHA QUE ACABOU DE SER EDITADA
+
+   Salvar fecha a folha e devolve a pessoa a uma lista onde UM numero mudou.
+   Sem marcar qual, conferir o resultado da propria edicao vira procurar.
+
+   O tom segura no comeco e so' depois dissolve: o realce precisa sobreviver
+   a' folha terminando de descer, senao ele acontece atras dela e ninguem ve'.
+   Termina em `--surface` e nao em `transparent` porque a linha tem fundo
+   proprio — dissolver para transparente mostraria o cartao por baixo.
+   ========================================================================= */
+
+.linha-destaque {
+  animation: linha-destaque 1.3s var(--ease-out-quint) both;
+}
+
+@keyframes linha-destaque {
+  0%,
+  30% {
+    background-color: var(--primary-soft);
+  }
+  100% {
+    background-color: var(--surface);
+  }
+}
+
+/* ============================================================================
    LOADING DA MARCA
 
    Fora de @layer de proposito: precisa vencer a regra global de

@@ -544,6 +544,7 @@ export function LinhaDivida({
                 perigo: true,
                 confirmar: "Excluir?",
                 executar: () => excluirDivida(divida.id),
+                removeALinha: true,
               } satisfies Acao,
             ]
           : []),
