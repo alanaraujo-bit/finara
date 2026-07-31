@@ -21,7 +21,9 @@ export function ThemeToggle({ className }: { className?: string }) {
   return (
     <button
       type="button"
-      aria-label={isDark ? "Ativar tema claro" : "Ativar tema escuro"}
+      // O rotulo tambem depende do tema, entao precisa do mesmo guard do icone:
+      // no servidor `resolvedTheme` e' undefined e o texto divergiria na hidratacao.
+      aria-label={!mounted ? "Alternar tema" : isDark ? "Ativar tema claro" : "Ativar tema escuro"}
       onClick={() => setTheme(isDark ? "light" : "dark")}
       className={cn(
         "relative grid size-9 place-items-center rounded-lg text-muted",
