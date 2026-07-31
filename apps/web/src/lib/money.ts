@@ -16,11 +16,20 @@ const BRL_SEM_SIMBOLO = new Intl.NumberFormat("pt-BR", {
   maximumFractionDigits: 2,
 });
 
+/**
+ * `maximumFractionDigits: 1` parece pedido razoavel — "manda ate' uma casa" —
+ * mas o Intl aplica isso sobre o valor JA' EM REAIS, nao sobre os centavos.
+ * R$ 76,50 vira "R$ 76,5": os centavos somem e o que sobra tem CARA de
+ * centavo truncado (76 reais e 5 centavos?), nao de arredondamento. Como o
+ * uso e' sempre espaço apertado (celula de calendario, cartao de resumo),
+ * zero casas resolve: "R$ 77", "R$ 2 mil" — nunca mente sobre precisao
+ * porque nao promete nenhuma.
+ */
 const COMPACTO = new Intl.NumberFormat("pt-BR", {
   style: "currency",
   currency: "BRL",
   notation: "compact",
-  maximumFractionDigits: 1,
+  maximumFractionDigits: 0,
 });
 
 /** 123456 -> "R$ 1.234,56" */
