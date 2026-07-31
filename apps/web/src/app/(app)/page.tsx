@@ -52,7 +52,7 @@ export default async function DashboardPage() {
   const contaVazia = resumo.totalContas === 0 && recentes.length === 0;
 
   return (
-    <div className="mx-auto w-full max-w-[1180px] px-4 py-6 sm:px-6 lg:px-8 lg:py-10">
+    <div className="mx-auto w-full max-w-[1320px] px-4 py-6 sm:px-6 lg:px-8 lg:py-10">
       <header className="flex animate-[fade-up_0.4s_var(--ease-out-quint)_both] flex-wrap items-end justify-between gap-4">
         <div>
           <p className="text-[13px] text-muted">Bem-vindo de volta, {primeiroNome}</p>
@@ -99,15 +99,10 @@ export default async function DashboardPage() {
           {/* ---------- saldo + indicadores ---------- */}
           <section className="mt-6 grid gap-4 lg:grid-cols-[1.35fr_1fr]">
             <Card
-              className="relative animate-[fade-up_0.45s_var(--ease-out-quint)_both] overflow-hidden"
+              className="animate-[fade-up_0.45s_var(--ease-out-quint)_both]"
               style={{ animationDelay: "40ms" }}
             >
-              <div
-                aria-hidden
-                className="pointer-events-none absolute -right-16 -top-20 size-64 rounded-full opacity-[0.13] blur-3xl"
-                style={{ background: "var(--primary)" }}
-              />
-              <CardContent className="relative p-6">
+              <CardContent className="p-6">
                 <div className="flex items-center gap-2">
                   <p className="text-[13px] font-medium text-muted">Saldo total</p>
                   {/* Sem mes anterior nao ha' comparacao honesta: o selo some. */}

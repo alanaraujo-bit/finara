@@ -1,6 +1,15 @@
 "use server";
 
-import { and, cardInvoices, creditCards, db, eq, financialAccounts, sql } from "@finara/db";
+import {
+  and,
+  cardInvoices,
+  creditCards,
+  db,
+  eq,
+  financialAccounts,
+  sql,
+  transactions,
+} from "@finara/db";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { newId } from "@/lib/id";
@@ -69,15 +78,7 @@ export async function pagarFatura(faturaId: string): Promise<EstadoCartao> {
 
   await db.transaction(async (tx) => {
     const [fatura] = await tx
-      .select({
-        id: cardInvoices.id,
-        cardId: cardInvoices.cardId,
-        status: cardInvoices.status,
-        total: sql<number>`coalesce((
-          select sum(t.amount) from transactions t
-          where t.invoice_id = ${cardInvoices.id} and t.status <> 'canceled'
-        ), 0)`,
-      })
+      .select({ id: cardInvoices.id, cardId: cardInvoices.cardId, status: cardInvoices.status })
       .from(cardInvoices)
       .where(
         and(eq(cardInvoices.id, faturaId), eq(cardInvoices.workspaceId, workspace.workspaceId)),
@@ -86,7 +87,21 @@ export async function pagarFatura(faturaId: string): Promise<EstadoCartao> {
 
     if (!fatura || fatura.status === "paid") return;
 
-    const total = Number(fatura.total);
+    /**
+     * Consulta separada, de proposito — nao um subquery correlacionado
+     * comparando `t.invoice_id` a uma coluna solta `id` interpolada. Esse
+     * padrao tinha um bug real: dentro do subquery, `id` sem qualificar a
+     * tabela resolve pro escopo mais interno (a propria `transactions`), nao
+     * pro `card_invoices` de fora. O total saia sempre zero, e pagar a
+     * fatura gravava `totalAmount: 0` — dinheiro incorreto num registro que
+     * devia ficar historico. Ver o mesmo bug em `queries/cartoes.ts`.
+     */
+    const [{ total: totalBruto }] = await tx
+      .select({ total: sql<number>`coalesce(sum(${transactions.amount}), 0)` })
+      .from(transactions)
+      .where(and(eq(transactions.invoiceId, fatura.id), sql`${transactions.status} <> 'canceled'`));
+
+    const total = Number(totalBruto);
 
     await tx
       .update(cardInvoices)

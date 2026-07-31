@@ -42,7 +42,7 @@ export default async function DividasPage() {
   const opcoesContas = contas.map((c) => ({ id: c.id, nome: c.name }));
 
   return (
-    <div className="mx-auto w-full max-w-[880px] px-4 py-6 sm:px-6 lg:px-8 lg:py-10">
+    <div className="mx-auto w-full max-w-[1040px] px-4 py-6 sm:px-6 lg:px-8 lg:py-10">
       <header className="flex animate-[fade-up_0.4s_var(--ease-out-quint)_both] items-end justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-text">Dívidas</h1>

@@ -4,9 +4,10 @@ import { and, creditCards, db, eq, financialAccounts, sql, transactions } from "
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { mesmoDiaNoMes } from "@/lib/datas";
+import { cicloDaCompra, cicloDaReferencia, referenciaMaisMeses } from "@/lib/faturas";
 import { newId } from "@/lib/id";
 import { parseMoney } from "@/lib/money";
-import { garantirFaturaDaCompra } from "@/lib/queries/cartoes";
+import { garantirFatura } from "@/lib/queries/cartoes";
 import { exigirSessao } from "@/lib/session";
 
 const esquema = z.object({
@@ -116,28 +117,34 @@ export async function criarLancamento(
   const sobra = centavos - base * parcelas;
   const grupoId = parcelas > 1 ? newId() : null;
 
+  // Ciclo da PRIMEIRA parcela: as demais andam sobre o mes de referencia
+  // dele, nunca sao re-inferidas de uma data de calendario (ver o comentario
+  // de `referenciaMaisMeses` — inferir de novo colide fevereiro com janeiro
+  // sempre que o fechamento cai no dia 28).
+  const cicloBase = cartao ? cicloDaCompra(data, cartao.fechamento, cartao.vencimento) : null;
+
   await db.transaction(async (tx) => {
     const executor = tx as unknown as typeof db;
 
     for (let i = 0; i < parcelas; i++) {
-      /**
-       * Cada parcela tem a data do mes correspondente, e e' a data que decide
-       * em qual fatura ela cai. Jogar as 12 parcelas na fatura da compra —
-       * que e' o que acontecia antes, porque nem existia parcelamento —
-       * inflava um mes e esvaziava os outros onze.
-       */
+      // Data do lancamento em si (calendario/extrato). Independente da
+      // fatura: uma parcela pode ter dia de calendario 28 de fevereiro e
+      // ainda assim pertencer ao SEU proprio ciclo, distinto do da vizinha.
       const dataDaParcela = i === 0 ? data : mesmoDiaNoMes(data, i);
 
-      const invoiceId = cartao
-        ? await garantirFaturaDaCompra({
-            workspaceId: workspace.workspaceId,
-            cardId: cartao.id,
-            dataCompra: dataDaParcela,
-            diaFechamento: cartao.fechamento,
-            diaVencimento: cartao.vencimento,
-            executor,
-          })
-        : null;
+      const invoiceId =
+        cartao && cicloBase
+          ? await garantirFatura({
+              workspaceId: workspace.workspaceId,
+              cardId: cartao.id,
+              ciclo: cicloDaReferencia(
+                referenciaMaisMeses(cicloBase.referencia, i),
+                cartao.fechamento,
+                cartao.vencimento,
+              ),
+              executor,
+            })
+          : null;
 
       await tx.insert(transactions).values({
         id: newId(),

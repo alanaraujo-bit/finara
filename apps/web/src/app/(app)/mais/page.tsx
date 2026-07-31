@@ -25,7 +25,7 @@ export default async function MaisPage() {
     .filter((grupo) => grupo.items.length > 0);
 
   return (
-    <div className="mx-auto w-full max-w-[880px] px-4 py-6 sm:px-6 lg:px-8 lg:py-10">
+    <div className="mx-auto w-full max-w-[1040px] px-4 py-6 sm:px-6 lg:px-8 lg:py-10">
       <header className="animate-[fade-up_0.4s_var(--ease-out-quint)_both]">
         <h1 className="text-2xl font-semibold tracking-tight text-text">Mais</h1>
         <p className="mt-1 text-[13.5px] text-muted">

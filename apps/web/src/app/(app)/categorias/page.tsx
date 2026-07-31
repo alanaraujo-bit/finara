@@ -15,7 +15,7 @@ export default async function CategoriasPage() {
   const categorias = await listarCategoriasDaTela(workspace.workspaceId, referencia);
 
   return (
-    <div className="mx-auto w-full max-w-[880px] px-4 py-6 sm:px-6 lg:px-8 lg:py-10">
+    <div className="mx-auto w-full max-w-[1040px] px-4 py-6 sm:px-6 lg:px-8 lg:py-10">
       {/* O mes so' vira nome aqui: "julho de 2026" e' texto de tela, nao dado. */}
       <PainelCategorias categorias={categorias} nomeMes={nomeDoMes(referencia).split(" de ")[0]} />
     </div>

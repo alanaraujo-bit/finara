@@ -72,6 +72,29 @@ export function cicloDaCompra(
   };
 }
 
+/**
+ * Soma meses a uma referencia 'YYYY-MM'.
+ *
+ * E' o que separa as parcelas de uma compra parcelada por fatura: a parcela
+ * i pertence ao ciclo `referenciaMaisMeses(cicloDaPrimeira.referencia, i)`,
+ * andando mes a mes sobre o MES DE REFERENCIA — nunca inferido de volta a
+ * partir de uma data de calendario.
+ *
+ * A tentacao seria calcular a data da parcela i (dia fixo, mes+i, via
+ * `mesmoDiaNoMes`) e jogar essa data em `cicloDaCompra` de novo. Isso quebra:
+ * um cartao que fecha dia 28 e uma compra ancorada no dia 31 faz a parcela de
+ * fevereiro encolher pro dia 28 — que cai EXATAMENTE no fechamento — e
+ * "empata" com a parcela de janeiro, que tambem rola pra fevereiro por ter
+ * passado do fechamento no mes dela. Duas parcelas, mesma fatura, uma delas
+ * silenciosamente sumida. Andar sobre a referencia elimina essa colisao:
+ * cada parcela sempre cai num mes distinto, nao importa o dia do fechamento.
+ */
+export function referenciaMaisMeses(referencia: string, meses: number): string {
+  const [ano, mes] = referencia.split("-").map(Number) as [number, number];
+  const [anoNovo, mesNovo] = somarMes(ano, mes, meses);
+  return `${anoNovo}-${String(mesNovo).padStart(2, "0")}`;
+}
+
 /** Ciclo pelo mes de referencia, para criar faturas futuras ou passadas. */
 export function cicloDaReferencia(
   referencia: string,
