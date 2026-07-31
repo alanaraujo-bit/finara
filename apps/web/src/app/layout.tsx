@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { ServiceWorkerRegistration } from "@/components/service-worker";
 import { ThemeProvider } from "@/components/theme-provider";
+import { APARELHOS_IOS, arquivoSplash, mediaSplash } from "@/lib/splash-ios";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -25,27 +26,62 @@ export const metadata: Metadata = {
   applicationName: "Finara",
   manifest: "/manifest.webmanifest",
   /**
-   * O iOS ignora os icones do manifesto: na tela de inicio ele usa o
-   * `apple-touch-icon`, e sem esta declaracao cai num favicon esticado ou
-   * numa miniatura da propria tela. E' a diferenca entre parecer app e
-   * parecer atalho de navegador.
+   * `icons` NAO e' declarado aqui de proposito. Os arquivos `favicon.ico`,
+   * `icon.svg` e `apple-icon.png` estao em `src/app/` e o Next emite os
+   * <link> sozinho a partir deles, com hash de conteudo no URL. Declarar
+   * tambem por aqui geraria tags duplicadas e, pior, uma segunda lista para
+   * manter em dia toda vez que os assets mudassem de nome.
+   *
+   * O `apple-icon.png` e' o que faz o app ter cara de app na tela de inicio
+   * do iPhone — sem ele o iOS usa uma miniatura da propria tela.
    */
-  icons: {
-    icon: [
-      { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
-      { url: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
-    ],
-    apple: [{ url: "/icons/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
-  },
   appleWebApp: {
     capable: true,
     title: "Finara",
     // "default" mantem a barra de status legivel nos dois temas.
     statusBarStyle: "default",
+    /**
+     * Tela de abertura do iOS. Sem isto o PWA em standalone abre com um
+     * retangulo branco ate' o primeiro quadro — e no tema escuro esse flash
+     * branco e' agressivo. A lista vem de `lib/splash-ios.ts`, a mesma que o
+     * gerador de assets usa, entao nao existe <link> apontando para PNG que
+     * nao foi gerado.
+     */
+    startupImage: APARELHOS_IOS.flatMap((ap) =>
+      [false, true].map((escuro) => ({
+        url: `/icons/splash/${arquivoSplash(ap, escuro)}`,
+        media: mediaSplash(ap, escuro),
+      })),
+    ),
   },
   formatDetection: {
     // Impede o iOS de transformar valores e datas em links de telefone.
     telephone: false,
+  },
+  /**
+   * Preview de link. `metadataBase` existe porque o og:image precisa de URL
+   * absoluta: sem ele o Next monta o caminho relativo e o WhatsApp, o
+   * Telegram e o iMessage nao carregam a imagem.
+   */
+  metadataBase: new URL(
+    process.env.NEXT_PUBLIC_SITE_URL ??
+      (process.env.VERCEL_PROJECT_PRODUCTION_URL
+        ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+        : "http://localhost:3000"),
+  ),
+  openGraph: {
+    type: "website",
+    siteName: "Finara",
+    locale: "pt_BR",
+    title: "Finara — seu dinheiro, inteiro",
+    description: "Contas, cartões, assinaturas, dívidas e recebíveis no mesmo lugar.",
+    images: [{ url: "/og-image.png", width: 1200, height: 630, alt: "Finara" }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Finara — seu dinheiro, inteiro",
+    description: "Contas, cartões, assinaturas, dívidas e recebíveis no mesmo lugar.",
+    images: ["/og-image.png"],
   },
 };
 

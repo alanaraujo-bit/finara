@@ -5,7 +5,6 @@ import {
   ArrowCounterClockwiseIcon,
   PencilSimpleIcon,
   PlusIcon,
-  SpinnerGapIcon,
   TrashIcon,
 } from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
@@ -20,6 +19,7 @@ import { IconeCategoria } from "@/components/categorias/icone-categoria";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Carregando } from "@/components/ui/carregando";
 import type { CategoriaDaTela } from "@/lib/queries/categorias";
 import { formatMoney } from "@/lib/money";
 import { cn } from "@/lib/utils";
@@ -290,7 +290,7 @@ function Acoes({ categoria: c, aoEditar }: { categoria: CategoriaDaTela; aoEdita
     >
       {pendente ? (
         <span className="grid size-8 place-items-center text-subtle">
-          <SpinnerGapIcon size={15} className="animate-spin" />
+          <Carregando size={15} rotulo={null} />
         </span>
       ) : (
         <>

@@ -1,6 +1,6 @@
 "use client";
 
-import { PauseIcon, PlayIcon, PlusIcon, SpinnerGapIcon, XIcon } from "@phosphor-icons/react";
+import { PauseIcon, PlayIcon, PlusIcon, XIcon } from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
 import { useActionState, useState, useTransition } from "react";
 import {
@@ -10,6 +10,7 @@ import {
   type EstadoAssinatura,
 } from "@/app/(app)/assinaturas/actions";
 import { Button } from "@/components/ui/button";
+import { Carregando } from "@/components/ui/carregando";
 import { FieldError, Input, Label } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { SegmentedField, Select } from "@/components/ui/select";
@@ -177,7 +178,7 @@ function CamposAssinatura({
       <Button type="submit" size="lg" disabled={pendente} className="w-full">
         {pendente ? (
           <>
-            <SpinnerGapIcon size={17} className="animate-spin" />
+            <Carregando size={17} rotulo={null} />
             Criando...
           </>
         ) : (
@@ -233,7 +234,7 @@ export function AcoesAssinatura({ id, ativa }: { id: string; ativa: boolean }) {
         className="grid size-8 place-items-center rounded-lg text-subtle transition-colors hover:bg-surface-2 hover:text-text disabled:opacity-50"
       >
         {pendente ? (
-          <SpinnerGapIcon size={15} className="animate-spin" />
+          <Carregando size={15} rotulo={null} />
         ) : ativa ? (
           <PauseIcon size={15} weight="fill" />
         ) : (

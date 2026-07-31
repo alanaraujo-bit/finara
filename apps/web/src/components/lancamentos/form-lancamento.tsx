@@ -1,10 +1,10 @@
 "use client";
 
-import { SpinnerGapIcon } from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
 import { useActionState, useEffect, useState } from "react";
 import { criarLancamento, type EstadoLancamento } from "@/app/(app)/lancamentos/actions";
 import { Button } from "@/components/ui/button";
+import { Carregando } from "@/components/ui/carregando";
 import { FieldError, Input, Label } from "@/components/ui/input";
 import { SegmentedField, Select } from "@/components/ui/select";
 import { mesmoDiaNoMes, mesPorExtenso } from "@/lib/datas";
@@ -71,8 +71,12 @@ export function FormLancamento({
 
   useEffect(() => {
     if (estado.ok) {
+      // Sem `router.refresh()` depois do push: a action ja' chama
+      // `revalidatePath("/lancamentos")`, entao o push ja' busca dado fresco.
+      // Os dois juntos disputavam o mesmo quadro e a navegacao travava no
+      // fallback de `loading.tsx` — a pessoa salvava o lancamento e ficava
+      // olhando a tela de espera.
       router.push("/lancamentos");
-      router.refresh();
     }
   }, [estado.ok, router]);
 
@@ -273,7 +277,7 @@ export function FormLancamento({
       <Button type="submit" size="lg" className="w-full" disabled={pendente}>
         {pendente ? (
           <>
-            <SpinnerGapIcon size={17} className="animate-spin" />
+            <Carregando size={17} rotulo={null} />
             Salvando...
           </>
         ) : (

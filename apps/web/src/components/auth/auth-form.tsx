@@ -1,10 +1,10 @@
 "use client";
 
-import { EyeIcon, EyeSlashIcon, SpinnerGapIcon } from "@phosphor-icons/react";
+import { EyeIcon, EyeSlashIcon } from "@phosphor-icons/react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Carregando } from "@/components/ui/carregando";
 import { FieldError, Input, Label } from "@/components/ui/input";
 import { signIn, signUp } from "@/lib/auth-client";
 
@@ -43,7 +43,6 @@ function destinoSeguro(proximo: string | undefined): string {
 }
 
 export function AuthForm({ modo, proximo }: { modo: Modo; proximo?: string }) {
-  const router = useRouter();
   const criando = modo === "criar";
   const destino = destinoSeguro(proximo);
 
@@ -79,10 +78,21 @@ export function AuthForm({ modo, proximo }: { modo: Modo; proximo?: string }) {
       return;
     }
 
-    // refresh() antes do push: o layout do servidor precisa reavaliar a sessao,
-    // senao a navegacao chega antes do cookie e cai de volta no login.
-    router.refresh();
-    router.push(destino);
+    /**
+     * Navegacao de documento inteiro, e nao `router.push`.
+     *
+     * O cookie de sessao acabou de mudar, entao TODO o HTML vindo do servidor
+     * esta' velho — inclusive o layout de (app), que le a sessao para montar
+     * a barra lateral. O par `refresh()` + `push()` que ficava aqui tentava
+     * resolver isso pelo lado do cliente e criava uma corrida: o refresh
+     * invalidava o cache do roteador no mesmo quadro em que o push comecava,
+     * e a navegacao ficava presa no fallback de `loading.tsx` para sempre —
+     * a pessoa logava e olhava a tela de espera sem fim.
+     *
+     * Recarregar a pagina inteira e' o comportamento correto para troca de
+     * sessao, e uma vez so' no login nao pesa.
+     */
+    window.location.assign(destino);
   }
 
   return (
@@ -160,7 +170,7 @@ export function AuthForm({ modo, proximo }: { modo: Modo; proximo?: string }) {
         <Button type="submit" size="lg" className="w-full" disabled={enviando}>
           {enviando ? (
             <>
-              <SpinnerGapIcon size={17} className="animate-spin" />
+              <Carregando size={17} rotulo={null} />
               {criando ? "Criando..." : "Entrando..."}
             </>
           ) : criando ? (

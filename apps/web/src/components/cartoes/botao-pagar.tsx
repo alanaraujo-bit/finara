@@ -1,10 +1,11 @@
 "use client";
 
-import { CheckCircleIcon, SpinnerGapIcon } from "@phosphor-icons/react";
+import { CheckCircleIcon } from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { pagarFatura } from "@/app/(app)/cartoes/actions";
 import { Button } from "@/components/ui/button";
+import { Carregando } from "@/components/ui/carregando";
 
 /**
  * Marcar fatura como paga move dinheiro de verdade (debita a conta), entao
@@ -38,7 +39,7 @@ export function BotaoPagar({ faturaId, valor }: { faturaId: string; valor: strin
         }
       >
         {pendente ? (
-          <SpinnerGapIcon size={14} className="animate-spin" />
+          <Carregando size={14} rotulo={null} />
         ) : (
           <CheckCircleIcon size={14} weight="bold" />
         )}

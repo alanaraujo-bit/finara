@@ -1,10 +1,11 @@
 "use client";
 
-import { CheckIcon, PlusIcon, SpinnerGapIcon } from "@phosphor-icons/react";
+import { CheckIcon, PlusIcon } from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
 import { useActionState, useState, useTransition } from "react";
 import { criarDivida, pagarParcela, type EstadoDivida } from "@/app/(app)/dividas/actions";
 import { Button } from "@/components/ui/button";
+import { Carregando } from "@/components/ui/carregando";
 import { FieldError, Input, Label } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { SegmentedField, Select } from "@/components/ui/select";
@@ -197,7 +198,7 @@ function CamposDivida({
       <Button type="submit" size="lg" disabled={pendente} className="w-full">
         {pendente ? (
           <>
-            <SpinnerGapIcon size={17} className="animate-spin" />
+            <Carregando size={17} rotulo={null} />
             Criando...
           </>
         ) : (
@@ -346,7 +347,7 @@ export function BotaoPagarParcela({
         }
       >
         {pendente ? (
-          <SpinnerGapIcon size={14} className="animate-spin" />
+          <Carregando size={14} rotulo={null} />
         ) : (
           <CheckIcon size={14} weight="bold" />
         )}

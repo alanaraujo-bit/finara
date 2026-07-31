@@ -1,9 +1,9 @@
 "use client";
 
-import { SpinnerGapIcon } from "@phosphor-icons/react";
 import { useActionState } from "react";
 import { aceitar, type EstadoAceite } from "@/app/convite/[token]/actions";
 import { Button } from "@/components/ui/button";
+import { Carregando } from "@/components/ui/carregando";
 import { FieldError } from "@/components/ui/input";
 
 export function BotaoAceitar({ token }: { token: string }) {
@@ -15,7 +15,7 @@ export function BotaoAceitar({ token }: { token: string }) {
       <Button type="submit" size="lg" className="w-full" disabled={pendente}>
         {pendente ? (
           <>
-            <SpinnerGapIcon size={17} className="animate-spin" />
+            <Carregando size={17} rotulo={null} />
             Entrando no espaço...
           </>
         ) : (

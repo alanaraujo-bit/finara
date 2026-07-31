@@ -1,9 +1,10 @@
 "use client";
 
-import { CheckIcon, CopyIcon, PaperPlaneTiltIcon, SpinnerGapIcon } from "@phosphor-icons/react";
+import { CheckIcon, CopyIcon, PaperPlaneTiltIcon } from "@phosphor-icons/react";
 import { useActionState, useState } from "react";
 import { gerarConvite, type EstadoConvite } from "@/app/(app)/ajustes/actions";
 import { Button } from "@/components/ui/button";
+import { Carregando } from "@/components/ui/carregando";
 import { FieldError, Input, Label } from "@/components/ui/input";
 
 export function ConviteParceiro({ podeConvidar }: { podeConvidar: boolean }) {
@@ -36,7 +37,7 @@ export function ConviteParceiro({ podeConvidar }: { podeConvidar: boolean }) {
         <Button type="submit" size="lg" disabled={pendente} className="shrink-0">
           {pendente ? (
             <>
-              <SpinnerGapIcon size={16} className="animate-spin" />
+              <Carregando size={16} rotulo={null} />
               Gerando...
             </>
           ) : (

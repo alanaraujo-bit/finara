@@ -1,42 +1,79 @@
+import { MARCA_D, MARCA_PESO, MARCA_VIEWBOX } from "@/lib/marca";
 import { cn } from "@/lib/utils";
 
 /**
- * Marca do Finara: um "F" implicito formado por uma barra vertical e duas
- * horizontais que sobem, sugerindo crescimento. Puro SVG, sem arquivo de
- * imagem — escala em qualquer tamanho e acompanha a cor do tema.
+ * O traco da marca, sozinho e sem fundo. Herda a cor de quem o contem
+ * (`currentColor`), entao serve tanto branco sobre o jade quanto
+ * monocromatico dentro de um botao.
+ *
+ * A espessura escala junto com o desenho de proposito (nada de
+ * `vectorEffect="non-scaling-stroke"`): traco de largura fixa engordaria em
+ * relacao a marca nos tamanhos pequenos e fecharia os contornos internos.
  */
-export function Logo({ className, size = 28 }: { className?: string; size?: number }) {
+export function Marca({
+  size = 28,
+  className,
+  peso = MARCA_PESO,
+}: {
+  size?: number;
+  className?: string;
+  peso?: number;
+}) {
   return (
     <svg
       width={size}
       height={size}
-      viewBox="0 0 32 32"
+      viewBox={MARCA_VIEWBOX}
       fill="none"
       aria-hidden="true"
       className={cn("shrink-0", className)}
     >
-      <rect width="32" height="32" rx="9" className="fill-primary" />
       <path
-        d="M11 22.5V10.5C11 9.67157 11.6716 9 12.5 9H21"
-        stroke="var(--primary-fg)"
-        strokeWidth="2.75"
+        d={MARCA_D}
+        pathLength={100}
+        stroke="currentColor"
+        strokeWidth={peso}
         strokeLinecap="round"
       />
-      <path
-        d="M11.75 16H18.5"
-        stroke="var(--primary-fg)"
-        strokeWidth="2.75"
-        strokeLinecap="round"
-        opacity="0.72"
-      />
-      <circle cx="21.5" cy="21.5" r="2.25" fill="var(--primary-fg)" opacity="0.45" />
     </svg>
   );
 }
 
+/**
+ * A marca dentro do selo jade — o mesmo objeto que fica na tela inicial do
+ * celular, para o app e o icone instalado nao lerem como marcas diferentes.
+ *
+ * O gradiente vive no CSS, e nao num `<linearGradient>` do SVG, por dois
+ * motivos: nao produz `id` duplicado quando a logo aparece mais de uma vez na
+ * pagina (isto roda em Server Component, onde `useId` nao existe), e
+ * acompanha o token `--primary` nos dois temas de graca.
+ *
+ * O raio de 22.37% e' a proporcao do squircle do iOS — o selo na tela tem a
+ * mesma silhueta do icone no springboard.
+ */
+export function Logo({ className, size = 28 }: { className?: string; size?: number }) {
+  return (
+    <span
+      aria-hidden="true"
+      style={{ width: size, height: size, borderRadius: size * 0.2237 }}
+      className={cn(
+        "grid shrink-0 place-items-center overflow-hidden text-[var(--primary-fg)]",
+        "bg-[linear-gradient(135deg,color-mix(in_oklab,var(--primary)_78%,white)_0%,var(--primary)_48%,color-mix(in_oklab,var(--primary)_84%,black)_100%)]",
+        className,
+      )}
+    >
+      <Marca size={size} />
+    </span>
+  );
+}
+
+/**
+ * O nome. Tracking levemente negativo porque o Geist em semibold abre demais
+ * entre as letras redondas de "Finara" no tamanho de interface.
+ */
 export function Wordmark({ className }: { className?: string }) {
   return (
-    <span className={cn("text-[17px] font-semibold tracking-tight text-text", className)}>
+    <span className={cn("text-[17px] font-semibold tracking-[-0.018em] text-text", className)}>
       Finara
     </span>
   );

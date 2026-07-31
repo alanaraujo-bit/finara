@@ -1,0 +1,41 @@
+<!--
+  FINARA — favicons e metadados
+  Cole no <head>. Só é necessário fora do app Next: lá o `src/app/favicon.ico`,
+  `icon.svg` e `apple-icon.png` já fazem o Next emitir estas tags sozinho.
+-->
+
+<!-- ═══ Ícones ═══ -->
+<link rel="icon" href="/favicon.ico" sizes="48x48">
+<link rel="icon" href="/icon.svg" type="image/svg+xml" sizes="any">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png" sizes="180x180">
+<link rel="manifest" href="/site.webmanifest">
+
+<!-- ═══ Cor do chrome do navegador ═══ -->
+<meta name="theme-color" content="#fbfbfd" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#14161c" media="(prefers-color-scheme: dark)">
+
+<!-- ═══ PWA no iOS ═══ -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Finara">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<!--
+  As 20 telas de abertura (10 aparelhos × claro/escuro) estão em
+  /icons/splash/. O iOS não redimensiona nem escolhe a mais próxima: a media
+  query precisa casar device-width, device-height E device-pixel-ratio, senão
+  ele simplesmente não usa imagem nenhuma. A lista completa é gerada por
+  apps/web/src/lib/splash-ios.ts.
+-->
+<link rel="apple-touch-startup-image"
+      href="/icons/splash/1320x2868.png"
+      media="(prefers-color-scheme: light) and (device-width: 440px) and (device-height: 956px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
+
+<!-- ═══ Preview de link ═══ -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Finara">
+<meta property="og:locale" content="pt_BR">
+<meta property="og:title" content="Finara — seu dinheiro, inteiro">
+<meta property="og:description" content="Contas, cartões, assinaturas, dívidas e recebíveis no mesmo lugar.">
+<meta property="og:image" content="https://SEU-DOMINIO/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">

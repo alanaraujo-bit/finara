@@ -228,6 +228,108 @@
 }
 
 /* ============================================================================
+   LOADING DA MARCA
+
+   Fora de @layer de proposito: precisa vencer a regra global de
+   `prefers-reduced-motion` la' embaixo, que zera a duracao de TODA animacao.
+   Com o traco, zerar a duracao nao "desliga o efeito" — congela o desenho no
+   quadro final, que e' o caminho VAZIO. O loading sumiria por completo para
+   quem pediu menos movimento. As sobrescritas no fim desta secao resolvem.
+
+   Os keyframes falam em unidades de `pathLength="100"`, declarado no <path>:
+   100 = traco inteiro, independente do comprimento real do caminho.
+   ========================================================================= */
+
+/* Desenha do inicio ao fim e some pelo mesmo lado. O dasharray "100 100"
+   (traco + intervalo do mesmo tamanho do caminho) faz o ciclo comecar e
+   terminar com o caminho vazio — por isso a volta emenda sem pulo. */
+@keyframes marca-ciclo {
+  from {
+    stroke-dashoffset: 100;
+  }
+  to {
+    stroke-dashoffset: -100;
+  }
+}
+
+.marca-ciclo {
+  stroke-dasharray: 100 100;
+  animation: marca-ciclo 1.5s cubic-bezier(0.62, 0.02, 0.38, 1) infinite;
+}
+
+/* Desenha uma vez e fica. Numa tela inteira, repetir vira nervosismo. */
+@keyframes marca-desenha {
+  from {
+    stroke-dashoffset: 100;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.marca-desenha {
+  stroke-dasharray: 100;
+  /* Curva propria, e nao a --ease-out-quint da casa: aquela entrega ~70% do
+     percurso nos primeiros 20% do tempo, e o laco ja' aparecia pronto antes
+     de dar pra ver o traco andando. Aqui o meio e' quase linear e so' o fim
+     assenta, entao o desenho se ve acontecendo do comeco ao fim. */
+  animation: marca-desenha 1.05s cubic-bezier(0.45, 0.05, 0.25, 1) both;
+}
+
+/* Depois de desenhada, a marca respira: sinal de "ainda trabalhando" que nao
+   compete com o conteudo prestes a entrar. */
+@keyframes marca-respira {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    /* Nao desce mais que isto: no tema claro o jade a 0.4 fica lavado e o
+       desenho perde a forma antes de recuperar a opacidade. */
+    opacity: 0.52;
+  }
+}
+
+.marca-respira {
+  /* O atraso espera o desenho terminar (1.05s) para nao competir com ele. */
+  animation: marca-respira 2.4s ease-in-out 1.2s infinite;
+}
+
+/* O bloco de loading so' aparece depois de 180ms: navegacao rapida termina
+   antes disso e a pessoa nunca ve o flash — pior que nao ter loading. */
+@keyframes marca-entra {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.marca-entra {
+  animation: marca-entra 0.3s var(--ease-out-quint) 0.18s both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Sem movimento no traco: a marca fica inteira e so' pulsa em opacidade,
+     que nao provoca desconforto vestibular e ainda comunica "carregando". */
+  .marca-ciclo,
+  .marca-respira {
+    stroke-dasharray: none;
+    animation: marca-respira 2s ease-in-out infinite !important;
+  }
+
+  .marca-desenha {
+    stroke-dasharray: none;
+    animation: none !important;
+  }
+
+  .marca-entra {
+    animation: none !important;
+  }
+}
+
+/* ============================================================================
    BASE
    ========================================================================= */
 

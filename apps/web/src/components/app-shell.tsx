@@ -7,7 +7,7 @@ import {
   SignOutIcon,
 } from "@phosphor-icons/react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useState, type ReactNode } from "react";
 import { Logo, Wordmark } from "@/components/logo";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -36,7 +36,6 @@ function salvarPreferenciaSidebar(recolhida: boolean) {
 }
 
 function BotaoSair() {
-  const router = useRouter();
   const [saindo, setSaindo] = useState(false);
 
   return (
@@ -47,10 +46,11 @@ function BotaoSair() {
       onClick={async () => {
         setSaindo(true);
         await signOut();
-        // refresh() garante que o layout do servidor reavalie a sessao;
-        // sem ele o usuario continuaria vendo a tela ate' recarregar na mao.
-        router.push("/entrar");
-        router.refresh();
+        // Documento inteiro, pelo mesmo motivo do login: a sessao mudou, entao
+        // todo HTML de servidor em cache esta' velho. `push` + `refresh` aqui
+        // era uma corrida — e deixar dado da conta anterior na tela depois de
+        // sair e' o pior desfecho possivel num app de dinheiro.
+        window.location.assign("/entrar");
       }}
       className="grid size-9 place-items-center rounded-lg text-muted transition-colors hover:bg-surface-2 hover:text-expense disabled:opacity-50"
     >

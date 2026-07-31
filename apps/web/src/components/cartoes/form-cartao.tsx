@@ -1,10 +1,11 @@
 "use client";
 
-import { PlusIcon, SpinnerGapIcon } from "@phosphor-icons/react";
+import { PlusIcon } from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
 import { useActionState, useState } from "react";
 import { criarCartao, type EstadoCartao } from "@/app/(app)/cartoes/actions";
 import { Button } from "@/components/ui/button";
+import { Carregando } from "@/components/ui/carregando";
 import { FieldError, Input, Label } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { SegmentedField, Select } from "@/components/ui/select";
@@ -226,7 +227,7 @@ function Campos({
       <Button type="submit" size="lg" disabled={pendente} className="w-full">
         {pendente ? (
           <>
-            <SpinnerGapIcon size={17} className="animate-spin" />
+            <Carregando size={17} rotulo={null} />
             Criando...
           </>
         ) : (

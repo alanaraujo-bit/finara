@@ -1,6 +1,6 @@
 "use client";
 
-import { BankIcon, SpinnerGapIcon } from "@phosphor-icons/react";
+import { BankIcon } from "@phosphor-icons/react";
 import dynamic from "next/dynamic";
 import { useTheme } from "next-themes";
 import { useRouter } from "next/navigation";
@@ -8,6 +8,7 @@ import { useState } from "react";
 import { createPortal } from "react-dom";
 import { registrarConexao } from "@/app/(app)/conexoes/actions";
 import { Button } from "@/components/ui/button";
+import { Carregando } from "@/components/ui/carregando";
 import { FieldError } from "@/components/ui/input";
 import { traduzirErroPluggy } from "@/lib/erros-pluggy";
 
@@ -69,7 +70,7 @@ export function ConectarBanco({ incluirSandbox }: { incluirSandbox: boolean }) {
       <Button size="lg" onClick={abrir} disabled={carregando}>
         {carregando ? (
           <>
-            <SpinnerGapIcon size={17} className="animate-spin" />
+            <Carregando size={17} rotulo={null} />
             Abrindo...
           </>
         ) : (
