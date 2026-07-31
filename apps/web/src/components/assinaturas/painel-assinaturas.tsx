@@ -1,32 +1,81 @@
 "use client";
 
-import { PauseIcon, PlayIcon, PlusIcon, XIcon } from "@phosphor-icons/react";
+import {
+  PauseIcon,
+  PencilSimpleIcon,
+  PlayIcon,
+  PlusIcon,
+  TrashIcon,
+  XIcon,
+} from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
 import { useActionState, useState, useTransition } from "react";
 import {
   alternarAssinatura,
   cancelarAssinatura,
   criarAssinatura,
+  editarAssinatura,
+  excluirAssinatura,
   type EstadoAssinatura,
 } from "@/app/(app)/assinaturas/actions";
 import { Button } from "@/components/ui/button";
 import { Carregando } from "@/components/ui/carregando";
 import { FieldError, Input, Label } from "@/components/ui/input";
+import { AcoesLinha } from "@/components/ui/acoes-linha";
 import { Modal } from "@/components/ui/modal";
+import { formatMoneyBare } from "@/lib/money";
 import { SegmentedField, Select } from "@/components/ui/select";
 import { ROTULO_CICLO } from "@/lib/recorrencia";
+
+/** O que a caixa de edicao precisa para abrir preenchida. */
+export type AssinaturaEditavel = {
+  id: string;
+  nome: string;
+  valor: number;
+  ciclo: string;
+  inicio: string;
+  categoriaId: string | null;
+  titularidade: "conjunto" | "meu";
+};
 
 export function FormAssinatura({
   categorias,
   dataPadrao,
   temParceiro,
+  assinatura,
+  aberto: abertoExterno,
+  aoFechar,
 }: {
   categorias: { id: string; nome: string }[];
   dataPadrao: string;
   temParceiro: boolean;
+  /** Presente = modo edicao. */
+  assinatura?: AssinaturaEditavel;
+  aberto?: boolean;
+  aoFechar?: () => void;
 }) {
   const [aberto, setAberto] = useState(false);
   const [instancia, setInstancia] = useState(0);
+
+  if (assinatura) {
+    return (
+      <Modal
+        aberto={Boolean(abertoExterno)}
+        aoFechar={aoFechar!}
+        titulo="Editar assinatura"
+        descricao="A próxima cobrança é recalculada a partir do início e do ciclo."
+      >
+        <CamposAssinatura
+          key={assinatura.id}
+          categorias={categorias}
+          dataPadrao={dataPadrao}
+          temParceiro={temParceiro}
+          assinatura={assinatura}
+          aoConcluir={aoFechar!}
+        />
+      </Modal>
+    );
+  }
 
   return (
     <>
@@ -64,19 +113,26 @@ function CamposAssinatura({
   categorias,
   dataPadrao,
   temParceiro,
+  assinatura,
   aoConcluir,
 }: {
   categorias: { id: string; nome: string }[];
   dataPadrao: string;
   temParceiro: boolean;
+  assinatura?: AssinaturaEditavel;
   aoConcluir: () => void;
 }) {
   const router = useRouter();
-  const [titularidade, setTitularidade] = useState("conjunto");
+  const [titularidade, setTitularidade] = useState<string>(
+    assinatura?.titularidade ?? "conjunto",
+  );
 
   const [estado, acao, pendente] = useActionState<EstadoAssinatura, FormData>(
     async (anterior, form) => {
-      const resultado = await criarAssinatura(anterior, form);
+      const resultado = await (assinatura ? editarAssinatura : criarAssinatura)(
+        anterior,
+        form,
+      );
       if (resultado.ok) {
         aoConcluir();
         router.refresh();
@@ -88,12 +144,14 @@ function CamposAssinatura({
 
   return (
     <form action={acao} className="space-y-4">
+        {assinatura && <input type="hidden" name="id" value={assinatura.id} />}
         <div className="grid gap-4 sm:grid-cols-[1.6fr_1fr]">
           <div>
             <Label htmlFor="nome">Serviço</Label>
             <Input
               id="nome"
               name="nome"
+              defaultValue={assinatura?.nome ?? ""}
               placeholder="Netflix, Spotify, academia..."
               autoComplete="off"
               disabled={pendente}
@@ -110,6 +168,7 @@ function CamposAssinatura({
               <Input
                 id="valor"
                 name="valor"
+                defaultValue={assinatura ? formatMoneyBare(assinatura.valor) : ""}
                 inputMode="decimal"
                 placeholder="0,00"
                 className="tabular pl-11"
@@ -123,7 +182,12 @@ function CamposAssinatura({
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
             <Label htmlFor="ciclo">Cobrança</Label>
-            <Select id="ciclo" name="ciclo" defaultValue="monthly" disabled={pendente}>
+            <Select
+              id="ciclo"
+              name="ciclo"
+              defaultValue={assinatura?.ciclo ?? "monthly"}
+              disabled={pendente}
+            >
               {Object.entries(ROTULO_CICLO).map(([v, r]) => (
                 <option key={v} value={v}>
                   {r}
@@ -137,7 +201,7 @@ function CamposAssinatura({
               id="inicio"
               name="inicio"
               type="date"
-              defaultValue={dataPadrao}
+              defaultValue={assinatura?.inicio ?? dataPadrao}
               disabled={pendente}
               required
             />
@@ -146,7 +210,12 @@ function CamposAssinatura({
 
         <div>
           <Label htmlFor="categoriaId">Categoria</Label>
-          <Select id="categoriaId" name="categoriaId" defaultValue="" disabled={pendente}>
+          <Select
+            id="categoriaId"
+            name="categoriaId"
+            defaultValue={assinatura?.categoriaId ?? ""}
+            disabled={pendente}
+          >
             <option value="">Sem categoria</option>
             {categorias.map((c) => (
               <option key={c.id} value={c.id}>
@@ -190,7 +259,22 @@ function CamposAssinatura({
 }
 
 /** Pausar/retomar e cancelar. Cancelar e' irreversivel, entao confirma. */
-export function AcoesAssinatura({ id, ativa }: { id: string; ativa: boolean }) {
+export function AcoesAssinatura({
+  id,
+  ativa,
+  assinatura,
+  categorias,
+  dataPadrao,
+  temParceiro,
+}: {
+  id: string;
+  ativa: boolean;
+  assinatura: AssinaturaEditavel;
+  categorias: { id: string; nome: string }[];
+  dataPadrao: string;
+  temParceiro: boolean;
+}) {
+  const [editando, setEditando] = useState(false);
   const router = useRouter();
   const [pendente, iniciar] = useTransition();
   const [confirmando, setConfirmando] = useState(false);
@@ -221,6 +305,35 @@ export function AcoesAssinatura({ id, ativa }: { id: string; ativa: boolean }) {
 
   return (
     <div className="flex items-center gap-1">
+      <FormAssinatura
+        categorias={categorias}
+        dataPadrao={dataPadrao}
+        temParceiro={temParceiro}
+        assinatura={assinatura}
+        aberto={editando}
+        aoFechar={() => setEditando(false)}
+      />
+      {/* Editar e excluir de vez. Cancelar (o X ao lado) continua existindo
+          para quem quer manter o registro de que ja' assinou; excluir e' para
+          quando o cadastro foi engano — assinatura nao gera lancamento por
+          conta propria, entao nao ha' historico a preservar. */}
+      <AcoesLinha
+        className="!opacity-100"
+        acoes={[
+          {
+            rotulo: "Editar assinatura",
+            icone: <PencilSimpleIcon size={15} weight="bold" />,
+            aoClicar: () => setEditando(true),
+          },
+          {
+            rotulo: "Excluir assinatura",
+            icone: <TrashIcon size={15} weight="bold" />,
+            perigo: true,
+            confirmar: "Excluir?",
+            executar: () => excluirAssinatura(id),
+          },
+        ]}
+      />
       <button
         type="button"
         disabled={pendente}

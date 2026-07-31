@@ -136,6 +136,280 @@ export async function criarDivida(_anterior: EstadoDivida, form: FormData): Prom
 }
 
 /**
+ * Edita a divida.
+ *
+ * Nome, credor e titularidade mudam sempre — sao rotulo, nao dinheiro.
+ *
+ * Valor da parcela, quantidade e proximo vencimento reescrevem o cronograma
+ * inteiro, entao so' valem para as parcelas AINDA NAO PAGAS. As pagas ficam
+ * como estao: elas ja' viraram lancamento no extrato e mexer nelas por aqui
+ * deixaria a divida e o extrato contando historias diferentes. Para corrigir
+ * uma parcela paga, o caminho e' desfazer o pagamento dela primeiro.
+ */
+export async function editarDivida(
+  _anterior: EstadoDivida,
+  form: FormData,
+): Promise<EstadoDivida> {
+  const { usuario, workspace } = await exigirSessao();
+
+  const parsed = esquema
+    .omit({ parcelasPagas: true })
+    .extend({ id: z.string().min(1) })
+    .safeParse({
+      id: form.get("id"),
+      nome: form.get("nome"),
+      credor: form.get("credor") || undefined,
+      parcelasTotal: form.get("parcelasTotal"),
+      valorParcela: form.get("valorParcela"),
+      proximoVencimento: form.get("proximoVencimento"),
+      titularidade: form.get("titularidade"),
+    });
+
+  if (!parsed.success) {
+    return { erro: parsed.error.issues[0]?.message ?? "Dados inválidos." };
+  }
+
+  const d = parsed.data;
+  const parcela = parseMoney(d.valorParcela);
+
+  if (parcela <= 0) return { erro: "O valor da parcela precisa ser maior que zero." };
+
+  try {
+    await db.transaction(async (tx) => {
+      const [divida] = await tx
+        .select({
+          id: debts.id,
+          pagas: debts.installmentsPaid,
+          valorPago: debts.paidAmount,
+        })
+        .from(debts)
+        .where(and(eq(debts.id, d.id), eq(debts.workspaceId, workspace.workspaceId)))
+        .limit(1);
+
+      if (!divida) throw new ErroDeRegra("Dívida não encontrada.");
+
+      if (d.parcelasTotal <= divida.pagas) {
+        throw new ErroDeRegra(
+          divida.pagas === 0
+            ? "A dívida precisa ter pelo menos uma parcela."
+            : `Você já pagou ${divida.pagas} ${divida.pagas === 1 ? "parcela" : "parcelas"}. O total não pode ser menor que isso.`,
+        );
+      }
+
+      // As pagas continuam com o valor e a data que tiveram de fato; o novo
+      // cronograma vale da próxima em diante.
+      const pendentes = d.parcelasTotal - divida.pagas;
+      const datas = Array.from({ length: pendentes }, (_, i) =>
+        mesmoDiaNoMes(d.proximoVencimento, i),
+      );
+
+      await tx
+        .delete(debtInstallments)
+        .where(
+          and(
+            eq(debtInstallments.debtId, divida.id),
+            eq(debtInstallments.workspaceId, workspace.workspaceId),
+            eq(debtInstallments.status, "pending"),
+          ),
+        );
+
+      await tx.insert(debtInstallments).values(
+        datas.map((data, i) => ({
+          id: newId(),
+          debtId: divida.id,
+          workspaceId: workspace.workspaceId,
+          number: divida.pagas + i + 1,
+          amount: parcela,
+          dueDate: data,
+          paidAmount: 0,
+          status: "pending" as const,
+        })),
+      );
+
+      await tx
+        .update(debts)
+        .set({
+          ownerId: d.titularidade === "conjunto" ? null : usuario.id,
+          name: d.nome,
+          creditor: d.credor ?? null,
+          // O total soma o que já foi pago de verdade com o novo cronograma —
+          // não `parcela * total`, que reescreveria o passado.
+          principalAmount: divida.valorPago + parcela * pendentes,
+          totalAmount: divida.valorPago + parcela * pendentes,
+          installmentsTotal: d.parcelasTotal,
+          endDate: datas[datas.length - 1] ?? null,
+          dueDay: Number(d.proximoVencimento.slice(-2)),
+          updatedAt: new Date(),
+        })
+        .where(eq(debts.id, divida.id));
+    });
+  } catch (e) {
+    if (e instanceof ErroDeRegra) return { erro: e.message };
+    throw e;
+  }
+
+  revalidatePath("/dividas");
+  revalidatePath("/calendario");
+  revalidatePath("/");
+  return { ok: true };
+}
+
+/** Erro de regra disparado dentro da transacao — o throw desfaz a escrita. */
+class ErroDeRegra extends Error {}
+
+/**
+ * Exclui a divida inteira, com as parcelas.
+ *
+ * So' quando nada dela virou dinheiro ainda. Com parcela paga existe
+ * lancamento no extrato apontando pra ca'; apagar deixaria despesa orfa. Com
+ * historico o caminho e' arquivar.
+ */
+export async function excluirDivida(id: string): Promise<EstadoDivida> {
+  const { workspace } = await exigirSessao();
+
+  const [divida] = await db
+    .select({ pagas: debts.installmentsPaid })
+    .from(debts)
+    .where(and(eq(debts.id, id), eq(debts.workspaceId, workspace.workspaceId)))
+    .limit(1);
+
+  if (!divida) return { erro: "Dívida não encontrada." };
+
+  if (divida.pagas > 0) {
+    return {
+      erro: `Esta dívida já tem ${divida.pagas} ${divida.pagas === 1 ? "parcela paga" : "parcelas pagas"} no extrato. Arquive em vez de excluir, ou desfaça os pagamentos primeiro.`,
+    };
+  }
+
+  await db.transaction(async (tx) => {
+    await tx
+      .delete(debtInstallments)
+      .where(
+        and(
+          eq(debtInstallments.debtId, id),
+          eq(debtInstallments.workspaceId, workspace.workspaceId),
+        ),
+      );
+    await tx.delete(debts).where(and(eq(debts.id, id), eq(debts.workspaceId, workspace.workspaceId)));
+  });
+
+  revalidatePath("/dividas");
+  revalidatePath("/calendario");
+  revalidatePath("/");
+  return { ok: true };
+}
+
+/** Tira a divida das listas sem apagar o historico dela. */
+export async function arquivarDivida(id: string, arquivar = true): Promise<EstadoDivida> {
+  const { workspace } = await exigirSessao();
+
+  await db
+    .update(debts)
+    .set({ status: arquivar ? "canceled" : "active", updatedAt: new Date() })
+    .where(and(eq(debts.id, id), eq(debts.workspaceId, workspace.workspaceId)));
+
+  revalidatePath("/dividas");
+  revalidatePath("/calendario");
+  revalidatePath("/");
+  return { ok: true };
+}
+
+/**
+ * Desfaz o pagamento de uma parcela: apaga o lancamento gerado, devolve o
+ * valor ao saldo da conta e volta a parcela e a divida ao estado anterior.
+ *
+ * Espelho exato de `pagarParcela`. E' o que permite corrigir um valor pago
+ * errado sem deixar o extrato e a divida divergindo.
+ */
+export async function desfazerPagamentoParcela(parcelaId: string): Promise<EstadoDivida> {
+  const { workspace } = await exigirSessao();
+
+  await db.transaction(async (tx) => {
+    const [parcela] = await tx
+      .select({
+        id: debtInstallments.id,
+        debtId: debtInstallments.debtId,
+        valor: debtInstallments.amount,
+        pago: debtInstallments.paidAmount,
+        status: debtInstallments.status,
+        lancamentoId: debtInstallments.transactionId,
+      })
+      .from(debtInstallments)
+      .where(
+        and(
+          eq(debtInstallments.id, parcelaId),
+          eq(debtInstallments.workspaceId, workspace.workspaceId),
+        ),
+      )
+      .limit(1);
+
+    if (!parcela || parcela.status !== "paid") return;
+
+    if (parcela.lancamentoId) {
+      const [lancamento] = await tx
+        .select({
+          id: transactions.id,
+          valor: transactions.amount,
+          contaId: transactions.accountId,
+        })
+        .from(transactions)
+        .where(
+          and(
+            eq(transactions.id, parcela.lancamentoId),
+            eq(transactions.workspaceId, workspace.workspaceId),
+          ),
+        )
+        .limit(1);
+
+      if (lancamento) {
+        await tx.delete(transactions).where(eq(transactions.id, lancamento.id));
+
+        if (lancamento.contaId) {
+          // Era despesa: devolver ao saldo.
+          await tx
+            .update(financialAccounts)
+            .set({
+              currentBalance: sql`${financialAccounts.currentBalance} + ${lancamento.valor}`,
+              updatedAt: new Date(),
+            })
+            .where(eq(financialAccounts.id, lancamento.contaId));
+        }
+      }
+    }
+
+    await tx
+      .update(debtInstallments)
+      .set({
+        status: "pending",
+        paidAmount: 0,
+        paidAt: null,
+        transactionId: null,
+        updatedAt: new Date(),
+      })
+      .where(eq(debtInstallments.id, parcela.id));
+
+    // `pago` e nao `valor`: se a parcela foi quitada com valor diferente do
+    // previsto, e' o valor efetivamente pago que precisa sair do acumulado.
+    await tx
+      .update(debts)
+      .set({
+        paidAmount: sql`greatest(${debts.paidAmount} - ${parcela.pago}, 0)`,
+        installmentsPaid: sql`greatest(${debts.installmentsPaid} - 1, 0)`,
+        // Reabre a dívida: ela tinha fechado sozinha ao quitar a última.
+        status: "active",
+        updatedAt: new Date(),
+      })
+      .where(eq(debts.id, parcela.debtId));
+  });
+
+  revalidatePath("/dividas");
+  revalidatePath("/lancamentos");
+  revalidatePath("/contas");
+  revalidatePath("/");
+  return { ok: true };
+}
+
+/**
  * Marca uma parcela como paga: cria o lancamento, debita a conta se houver,
  * e atualiza o acumulado da divida. Tudo numa transacao.
  */

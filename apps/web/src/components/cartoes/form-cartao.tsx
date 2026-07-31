@@ -1,27 +1,82 @@
 "use client";
 
-import { PlusIcon } from "@phosphor-icons/react";
+import {
+  ArchiveIcon,
+  ArrowCounterClockwiseIcon,
+  PencilSimpleIcon,
+  PlusIcon,
+  TrashIcon,
+} from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
 import { useActionState, useState } from "react";
-import { criarCartao, type EstadoCartao } from "@/app/(app)/cartoes/actions";
+import {
+  arquivarCartao,
+  criarCartao,
+  desfazerPagamentoFatura,
+  editarCartao,
+  excluirCartao,
+  type EstadoCartao,
+} from "@/app/(app)/cartoes/actions";
+import { AcoesLinha } from "@/components/ui/acoes-linha";
 import { Button } from "@/components/ui/button";
 import { Carregando } from "@/components/ui/carregando";
 import { FieldError, Input, Label } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
+import { formatMoneyBare } from "@/lib/money";
 import { SegmentedField, Select } from "@/components/ui/select";
 
 const BANDEIRAS = ["Visa", "Mastercard", "Elo", "American Express", "Hipercard", "Outra"];
 const DIAS = Array.from({ length: 31 }, (_, i) => i + 1);
 
+/** O que a caixa de edicao precisa para abrir preenchida. */
+export type CartaoEditavel = {
+  id: string;
+  nome: string;
+  bandeira: string | null;
+  final: string | null;
+  limite: number;
+  diaFechamento: number;
+  diaVencimento: number;
+  contaPagamentoId: string | null;
+  titularidade: "conjunto" | "meu";
+  temCompras: boolean;
+};
+
 export function FormCartao({
   contas,
   temParceiro,
+  cartao,
+  aberto: abertoExterno,
+  aoFechar,
 }: {
   contas: { id: string; nome: string }[];
   temParceiro: boolean;
+  /** Presente = modo edicao. */
+  cartao?: CartaoEditavel;
+  aberto?: boolean;
+  aoFechar?: () => void;
 }) {
   const [aberto, setAberto] = useState(false);
   const [instancia, setInstancia] = useState(0);
+
+  if (cartao) {
+    return (
+      <Modal
+        aberto={Boolean(abertoExterno)}
+        aoFechar={aoFechar!}
+        titulo="Editar cartão"
+        descricao="Mudar o dia de fechamento só vale para as compras seguintes."
+      >
+        <Campos
+          key={cartao.id}
+          contas={contas}
+          temParceiro={temParceiro}
+          cartao={cartao}
+          aoConcluir={aoFechar!}
+        />
+      </Modal>
+    );
+  }
 
   return (
     <>
@@ -57,20 +112,24 @@ export function FormCartao({
 function Campos({
   contas,
   temParceiro,
+  cartao,
   aoConcluir,
 }: {
   contas: { id: string; nome: string }[];
   temParceiro: boolean;
+  cartao?: CartaoEditavel;
   aoConcluir: () => void;
 }) {
   const router = useRouter();
-  const [titularidade, setTitularidade] = useState("conjunto");
-  const [fechamento, setFechamento] = useState("28");
-  const [vencimento, setVencimento] = useState("7");
+  const [titularidade, setTitularidade] = useState<string>(cartao?.titularidade ?? "conjunto");
+  const [fechamento, setFechamento] = useState(String(cartao?.diaFechamento ?? 28));
+  const [vencimento, setVencimento] = useState(String(cartao?.diaVencimento ?? 7));
   // Enquanto o usuario nao escolher o vencimento na mao, ele acompanha o
   // fechamento — na maioria dos cartoes a distancia e' de uma semana a dez
   // dias, e adivinhar certo poupa uma pergunta.
-  const [vencimentoManual, setVencimentoManual] = useState(false);
+  // Na edicao o vencimento ja e o real do cartao: sugerir de novo a partir
+  // do fechamento sobrescreveria o que a pessoa cadastrou.
+  const [vencimentoManual, setVencimentoManual] = useState(Boolean(cartao));
 
   function mudarFechamento(dia: string) {
     setFechamento(dia);
@@ -79,7 +138,7 @@ function Campos({
 
   const [estado, acao, pendente] = useActionState<EstadoCartao, FormData>(
     async (anterior, form) => {
-      const resultado = await criarCartao(anterior, form);
+      const resultado = await (cartao ? editarCartao : criarCartao)(anterior, form);
       if (resultado.ok) {
         aoConcluir();
         router.refresh();
@@ -97,6 +156,7 @@ function Campos({
           <Input
             id="nome"
             name="nome"
+            defaultValue={cartao?.nome ?? ""}
             placeholder="Nubank, Inter Gold..."
             autoComplete="off"
             disabled={pendente}
@@ -109,6 +169,7 @@ function Campos({
           <Input
             id="final"
             name="final"
+            defaultValue={cartao?.final ?? ""}
             inputMode="numeric"
             maxLength={4}
             placeholder="1234"
@@ -121,7 +182,12 @@ function Campos({
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
           <Label htmlFor="bandeira">Bandeira</Label>
-          <Select id="bandeira" name="bandeira" defaultValue="" disabled={pendente}>
+          <Select
+            id="bandeira"
+            name="bandeira"
+            defaultValue={cartao?.bandeira ?? ""}
+            disabled={pendente}
+          >
             <option value="">Não informar</option>
             {BANDEIRAS.map((b) => (
               <option key={b} value={b}>
@@ -141,7 +207,7 @@ function Campos({
               name="limite"
               inputMode="decimal"
               placeholder="0,00"
-              defaultValue="0,00"
+              defaultValue={cartao ? formatMoneyBare(cartao.limite) : "0,00"}
               className="tabular pl-11"
               disabled={pendente}
             />
@@ -195,7 +261,12 @@ function Campos({
 
       <div>
         <Label htmlFor="contaPagamentoId">Conta que paga a fatura</Label>
-        <Select id="contaPagamentoId" name="contaPagamentoId" defaultValue="" disabled={pendente}>
+        <Select
+          id="contaPagamentoId"
+          name="contaPagamentoId"
+          defaultValue={cartao?.contaPagamentoId ?? ""}
+          disabled={pendente}
+        >
           <option value="">Não definir agora</option>
           {contas.map((c) => (
             <option key={c.id} value={c.id}>
@@ -235,5 +306,85 @@ function Campos({
         )}
       </Button>
     </form>
+  );
+}
+
+
+/**
+ * Acoes do cartao: editar, arquivar e excluir.
+ *
+ * Excluir so' aparece quando nenhuma compra passou pelo cartao —
+ * `transactions.cardId` e' `SET NULL`, entao apagar um cartao com movimento
+ * soltaria as compras em silencio e elas virariam gastos sem origem.
+ */
+export function AcoesCartao({
+  cartao,
+  contas,
+  temParceiro,
+}: {
+  cartao: CartaoEditavel;
+  contas: { id: string; nome: string }[];
+  temParceiro: boolean;
+}) {
+  const [editando, setEditando] = useState(false);
+
+  return (
+    <>
+      <FormCartao
+        contas={contas}
+        temParceiro={temParceiro}
+        cartao={cartao}
+        aberto={editando}
+        aoFechar={() => setEditando(false)}
+      />
+      <AcoesLinha
+        acoes={[
+          {
+            rotulo: "Editar cartão",
+            icone: <PencilSimpleIcon size={15} weight="bold" />,
+            aoClicar: () => setEditando(true),
+          },
+          {
+            rotulo: "Arquivar cartão",
+            icone: <ArchiveIcon size={15} weight="bold" />,
+            confirmar: "Arquivar?",
+            executar: () => arquivarCartao(cartao.id, true),
+          },
+          ...(cartao.temCompras
+            ? []
+            : [
+                {
+                  rotulo: "Excluir cartão",
+                  icone: <TrashIcon size={15} weight="bold" />,
+                  perigo: true,
+                  confirmar: "Excluir?",
+                  executar: () => excluirCartao(cartao.id),
+                },
+              ]),
+        ]}
+      />
+    </>
+  );
+}
+
+/**
+ * Desfaz o pagamento da fatura: devolve o valor a' conta e reabre a fatura.
+ *
+ * E' o que destrava corrigir uma compra que caiu numa fatura ja' quitada.
+ * Sem isto, um erro de digitacao de tres meses atras ficaria impossivel de
+ * arrumar pela interface.
+ */
+export function BotaoDesfazerFatura({ faturaId }: { faturaId: string }) {
+  return (
+    <AcoesLinha
+      acoes={[
+        {
+          rotulo: "Desfazer pagamento da fatura",
+          icone: <ArrowCounterClockwiseIcon size={15} weight="bold" />,
+          confirmar: "Desfazer?",
+          executar: () => desfazerPagamentoFatura(faturaId),
+        },
+      ]}
+    />
   );
 }

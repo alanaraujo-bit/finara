@@ -22,6 +22,8 @@ export type CartaoComFatura = {
   ownerId: string | null;
   diaFechamento: number;
   diaVencimento: number;
+  /** So' a caixa de edicao usa; a lista nao mostra. */
+  contaPagamentoId: string | null;
   /** Fatura aberta mais recente. Null se o cartao ainda nao teve compra. */
   faturaId: string | null;
   faturaReferencia: string | null;
@@ -81,6 +83,7 @@ export async function listarCartoes(workspaceId: string): Promise<CartaoComFatur
       limite: c.creditLimit,
       cor: c.color,
       ownerId: c.ownerId,
+      contaPagamentoId: c.paymentAccountId,
       diaFechamento: c.closingDay,
       diaVencimento: c.dueDay,
       faturaId: fatura?.id ?? null,

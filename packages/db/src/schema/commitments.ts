@@ -39,7 +39,19 @@ export const subscriptionStatusEnum = pgEnum("subscription_status", [
   "canceled",
 ]);
 
-export const debtStatusEnum = pgEnum("debt_status", ["active", "paid", "renegotiated", "defaulted"]);
+/**
+ * "canceled" e' o arquivamento da divida: ela some das listas e dos totais,
+ * mas as parcelas pagas continuam explicando os lancamentos que geraram.
+ * Estado, e nao uma coluna `is_archived` — e' o mesmo desenho que
+ * `subscriptions` e `receivables` ja' usam.
+ */
+export const debtStatusEnum = pgEnum("debt_status", [
+  "active",
+  "paid",
+  "renegotiated",
+  "defaulted",
+  "canceled",
+]);
 
 export const settlementStatusEnum = pgEnum("settlement_status", [
   "pending",

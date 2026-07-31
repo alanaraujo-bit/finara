@@ -32,6 +32,10 @@ export default async function AssinaturasPage() {
         ownerId: subscriptions.ownerId,
         categoria: categories.name,
         categoriaCor: categories.color,
+        // Nao aparecem na lista: sao o que a caixa de edicao precisa para
+        // abrir preenchida, sem uma segunda consulta por linha.
+        inicio: subscriptions.startedAt,
+        categoriaId: subscriptions.categoryId,
       })
       .from(subscriptions)
       .leftJoin(categories, eq(categories.id, subscriptions.categoryId))
@@ -148,7 +152,22 @@ export default async function AssinaturasPage() {
                       )}
                     </div>
 
-                    <AcoesAssinatura id={s.id} ativa={ativa} />
+                    <AcoesAssinatura
+                      id={s.id}
+                      ativa={ativa}
+                      categorias={categoriasTodas.map((c) => ({ id: c.id, nome: c.nome }))}
+                      dataPadrao={hoje}
+                      temParceiro={membros.length > 1}
+                      assinatura={{
+                        id: s.id,
+                        nome: s.nome,
+                        valor: s.valor,
+                        ciclo: s.ciclo,
+                        inicio: s.inicio,
+                        categoriaId: s.categoriaId,
+                        titularidade: s.ownerId === usuario.id ? "meu" : "conjunto",
+                      }}
+                    />
                   </CardContent>
                 </Card>
               </li>

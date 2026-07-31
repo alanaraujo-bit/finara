@@ -1,7 +1,12 @@
-import { and, asc, db, eq, ne, receivables } from "@finara/db";
+import { and, asc, db, desc, eq, ne, receivables } from "@finara/db";
 import { HandCoinsIcon } from "@phosphor-icons/react/dist/ssr";
 import type { Metadata } from "next";
-import { BotaoReceber, FormRecebivel } from "@/components/a-receber/painel-receber";
+import {
+  AcoesRecebivel,
+  BotaoDesfazerRecebimento,
+  BotaoReceber,
+  FormRecebivel,
+} from "@/components/a-receber/painel-receber";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -17,7 +22,7 @@ export const metadata: Metadata = {
 export default async function AReceberPage() {
   const { usuario, workspace } = await exigirSessao();
 
-  const [lista, contas, membros] = await Promise.all([
+  const [lista, contas, membros, recebidos] = await Promise.all([
     db
       .select()
       .from(receivables)
@@ -31,6 +36,26 @@ export default async function AReceberPage() {
       .orderBy(asc(receivables.dueDate), asc(receivables.name)),
     listarContas(workspace.workspaceId),
     listarMembrosSimples(workspace.workspaceId),
+    /**
+     * Os ja' recebidos aparecem numa secao propria, e nao somem da tela.
+     *
+     * Sem isto o botao de desfazer nao teria onde morar, e um recebimento
+     * lancado na conta errada viraria beco sem saida: o recebivel some, o
+     * lancamento fica, e nao ha' caminho de volta pela interface.
+     *
+     * Limitado aos 8 mais recentes — isto e' area de correcao, nao historico.
+     */
+    db
+      .select()
+      .from(receivables)
+      .where(
+        and(
+          eq(receivables.workspaceId, workspace.workspaceId),
+          eq(receivables.status, "received"),
+        ),
+      )
+      .orderBy(desc(receivables.receivedAt))
+      .limit(8),
   ]);
 
   const hoje = paraDataLocal();
@@ -109,12 +134,55 @@ export default async function AReceberPage() {
                       valor={r.amount - r.receivedAmount}
                       contas={opcoesContas}
                     />
+
+                    <AcoesRecebivel
+                      temParceiro={membros.length > 1}
+                      recebivel={{
+                        id: r.id,
+                        nome: r.name,
+                        devedor: r.debtor,
+                        valor: r.amount,
+                        vencimento: r.dueDate,
+                        titularidade: r.ownerId === usuario.id ? "meu" : "conjunto",
+                      }}
+                    />
                   </CardContent>
                 </Card>
               </li>
             );
           })}
         </ul>
+      )}
+
+      {recebidos.length > 0 && (
+        <section className="mt-10">
+          <h2 className="mb-2.5 px-1 text-[12px] font-semibold uppercase tracking-wide text-subtle">
+            Recebidos recentemente
+          </h2>
+          <Card className="divide-y divide-border">
+            {recebidos.map((r) => (
+              <div key={r.id} className="group flex items-center gap-3.5 px-4 py-3">
+                <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-surface-2 text-subtle">
+                  <HandCoinsIcon size={17} weight="duotone" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[13.5px] font-medium text-text">{r.name}</p>
+                  <p className="text-[11.5px] text-subtle">
+                    {r.debtor ? `${r.debtor} · ` : ""}
+                    recebido
+                  </p>
+                </div>
+                <span className="tabular shrink-0 text-[13.5px] font-semibold text-income">
+                  {formatMoney(r.receivedAmount)}
+                </span>
+                <BotaoDesfazerRecebimento id={r.id} />
+              </div>
+            ))}
+          </Card>
+          <p className="mt-2 px-1 text-[12px] text-subtle">
+            Desfazer apaga o lançamento que o recebimento criou e devolve o valor ao saldo da conta.
+          </p>
+        </section>
       )}
     </div>
   );

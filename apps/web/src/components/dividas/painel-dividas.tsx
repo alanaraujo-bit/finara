@@ -1,26 +1,82 @@
 "use client";
 
-import { CheckIcon, PlusIcon } from "@phosphor-icons/react";
+import {
+  ArchiveIcon,
+  ArrowCounterClockwiseIcon,
+  CheckIcon,
+  PencilSimpleIcon,
+  PlusIcon,
+  TrashIcon,
+} from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
 import { useActionState, useState, useTransition } from "react";
-import { criarDivida, pagarParcela, type EstadoDivida } from "@/app/(app)/dividas/actions";
+import {
+  arquivarDivida,
+  criarDivida,
+  desfazerPagamentoParcela,
+  editarDivida,
+  excluirDivida,
+  pagarParcela,
+  type EstadoDivida,
+} from "@/app/(app)/dividas/actions";
+import { AcoesLinha } from "@/components/ui/acoes-linha";
+
 import { Button } from "@/components/ui/button";
 import { Carregando } from "@/components/ui/carregando";
 import { FieldError, Input, Label } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { SegmentedField, Select } from "@/components/ui/select";
 import { mesmoDiaNoMes, mesPorExtenso } from "@/lib/datas";
-import { formatMoney, parseMoney } from "@/lib/money";
+import { formatMoney, formatMoneyBare, parseMoney } from "@/lib/money";
+
+/** O que o formulario de edicao precisa para abrir preenchido. */
+export type DividaEditavel = {
+  id: string;
+  nome: string;
+  credor: string | null;
+  parcelasTotal: number;
+  parcelasPagas: number;
+  valorParcela: number;
+  proximoVencimento: string;
+  titularidade: "conjunto" | "meu";
+};
+
 
 export function FormDivida({
   dataPadrao,
   temParceiro,
+  divida,
+  aberto: abertoExterno,
+  aoFechar,
 }: {
   dataPadrao: string;
   temParceiro: boolean;
+  /** Presente = modo edicao, aberto por quem lista. */
+  divida?: DividaEditavel;
+  aberto?: boolean;
+  aoFechar?: () => void;
 }) {
   const [aberto, setAberto] = useState(false);
   const [instancia, setInstancia] = useState(0);
+
+  if (divida) {
+    return (
+      <Modal
+        aberto={Boolean(abertoExterno)}
+        aoFechar={aoFechar!}
+        titulo="Editar dívida"
+        descricao="O novo valor e o novo prazo valem das parcelas ainda não pagas em diante."
+      >
+        <CamposDivida
+          key={divida.id}
+          dataPadrao={dataPadrao}
+          temParceiro={temParceiro}
+          divida={divida}
+          aoConcluir={aoFechar!}
+        />
+      </Modal>
+    );
+  }
 
   return (
     <>
@@ -56,22 +112,36 @@ export function FormDivida({
 function CamposDivida({
   dataPadrao,
   temParceiro,
+  divida,
   aoConcluir,
 }: {
   dataPadrao: string;
   temParceiro: boolean;
+  divida?: DividaEditavel;
   aoConcluir: () => void;
 }) {
   const router = useRouter();
-  const [titularidade, setTitularidade] = useState("conjunto");
-  const [parcelasTotal, setParcelasTotal] = useState("");
-  const [parcelasPagas, setParcelasPagas] = useState("0");
-  const [valorParcela, setValorParcela] = useState("");
-  const [proximoVencimento, setProximoVencimento] = useState(dataPadrao);
+  const editando = Boolean(divida);
+  const [titularidade, setTitularidade] = useState<string>(divida?.titularidade ?? "conjunto");
+  const [parcelasTotal, setParcelasTotal] = useState(
+    divida ? String(divida.parcelasTotal) : "",
+  );
+  // Na edicao, "quantas ja' pagou" nao e' editavel: cada parcela paga gerou
+  // um lancamento no extrato, e mudar a contagem por aqui desencontraria os
+  // dois. Fica so' como leitura, e o campo vai fixo para o calculo.
+  const [parcelasPagas, setParcelasPagas] = useState(
+    divida ? String(divida.parcelasPagas) : "0",
+  );
+  const [valorParcela, setValorParcela] = useState(
+    divida ? formatMoneyBare(divida.valorParcela) : "",
+  );
+  const [proximoVencimento, setProximoVencimento] = useState(
+    divida?.proximoVencimento ?? dataPadrao,
+  );
 
   const [estado, acao, pendente] = useActionState<EstadoDivida, FormData>(
     async (anterior, form) => {
-      const resultado = await criarDivida(anterior, form);
+      const resultado = await (editando ? editarDivida : criarDivida)(anterior, form);
       if (resultado.ok) {
         aoConcluir();
         router.refresh();
@@ -85,12 +155,14 @@ function CamposDivida({
 
   return (
     <form action={acao} className="space-y-4">
+      {divida && <input type="hidden" name="id" value={divida.id} />}
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
           <Label htmlFor="nome">O que é</Label>
           <Input
             id="nome"
             name="nome"
+            defaultValue={divida?.nome ?? ""}
             placeholder="Financiamento do carro"
             autoComplete="off"
             disabled={pendente}
@@ -103,6 +175,7 @@ function CamposDivida({
           <Input
             id="credor"
             name="credor"
+            defaultValue={divida?.credor ?? ""}
             placeholder="Banco, loja, pessoa..."
             autoComplete="off"
             disabled={pendente}
@@ -135,8 +208,17 @@ function CamposDivida({
             className="tabular"
             value={parcelasPagas}
             onChange={(e) => setParcelasPagas(e.target.value)}
+            // Na edição só leitura: cada parcela paga gerou um lançamento no
+            // extrato, e mudar a contagem por aqui desencontraria os dois. Para
+            // corrigir, o caminho é desfazer o pagamento da parcela.
+            readOnly={editando}
             disabled={pendente}
           />
+          {editando && (
+            <p className="mt-1.5 text-[11.5px] text-subtle">
+              Para mudar isto, desfaça o pagamento da parcela na lista.
+            </p>
+          )}
         </div>
       </div>
 
@@ -357,5 +439,84 @@ export function BotaoPagarParcela({
         Cancelar
       </Button>
     </div>
+  );
+}
+
+/**
+ * Acoes da divida: editar, arquivar e excluir.
+ *
+ * Excluir so' e' oferecido quando nenhuma parcela foi paga. Com pagamento no
+ * historico a action recusa — e oferecer um botao que sera' recusado e' pior
+ * do que nao oferecer. Nesse caso sobra arquivar, que tira das listas sem
+ * apagar os lancamentos que a divida ja' explicou.
+ */
+export function AcoesDivida({
+  divida,
+  dataPadrao,
+  temParceiro,
+}: {
+  divida: DividaEditavel;
+  dataPadrao: string;
+  temParceiro: boolean;
+}) {
+  const [editando, setEditando] = useState(false);
+  const semHistorico = divida.parcelasPagas === 0;
+
+  return (
+    <>
+      <FormDivida
+        dataPadrao={dataPadrao}
+        temParceiro={temParceiro}
+        divida={divida}
+        aberto={editando}
+        aoFechar={() => setEditando(false)}
+      />
+      <AcoesLinha
+        acoes={[
+          {
+            rotulo: "Editar dívida",
+            icone: <PencilSimpleIcon size={15} weight="bold" />,
+            aoClicar: () => setEditando(true),
+          },
+          {
+            rotulo: "Arquivar dívida",
+            icone: <ArchiveIcon size={15} weight="bold" />,
+            confirmar: "Arquivar?",
+            executar: () => arquivarDivida(divida.id),
+          },
+          ...(semHistorico
+            ? [
+                {
+                  rotulo: "Excluir dívida",
+                  icone: <TrashIcon size={15} weight="bold" />,
+                  perigo: true,
+                  confirmar: "Excluir?",
+                  executar: () => excluirDivida(divida.id),
+                },
+              ]
+            : []),
+        ]}
+      />
+    </>
+  );
+}
+
+/**
+ * Desfaz o pagamento da parcela mais recente: apaga o lancamento gerado e
+ * devolve o valor ao saldo. E' o unico caminho para corrigir uma parcela
+ * quitada com valor ou conta errada.
+ */
+export function BotaoDesfazerParcela({ parcelaId }: { parcelaId: string }) {
+  return (
+    <AcoesLinha
+      acoes={[
+        {
+          rotulo: "Desfazer pagamento da parcela",
+          icone: <ArrowCounterClockwiseIcon size={15} weight="bold" />,
+          confirmar: "Desfazer?",
+          executar: () => desfazerPagamentoParcela(parcelaId),
+        },
+      ]}
+    />
   );
 }

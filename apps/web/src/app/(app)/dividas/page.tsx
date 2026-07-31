@@ -1,7 +1,12 @@
-import { and, asc, db, debtInstallments, debts, eq, ne } from "@finara/db";
+import { and, asc, db, debtInstallments, debts, desc, eq, ne } from "@finara/db";
 import { TrendDownIcon } from "@phosphor-icons/react/dist/ssr";
 import type { Metadata } from "next";
-import { BotaoPagarParcela, FormDivida } from "@/components/dividas/painel-dividas";
+import {
+  AcoesDivida,
+  BotaoDesfazerParcela,
+  BotaoPagarParcela,
+  FormDivida,
+} from "@/components/dividas/painel-dividas";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -17,11 +22,18 @@ export const metadata: Metadata = {
 export default async function DividasPage() {
   const { usuario, workspace } = await exigirSessao();
 
-  const [lista, parcelas, contas, membros] = await Promise.all([
+  const [lista, parcelas, contas, membros, pagas] = await Promise.all([
     db
       .select()
       .from(debts)
-      .where(and(eq(debts.workspaceId, workspace.workspaceId), ne(debts.status, "paid")))
+      // Quitada some sozinha; "canceled" e' a divida arquivada pela pessoa.
+      .where(
+        and(
+          eq(debts.workspaceId, workspace.workspaceId),
+          ne(debts.status, "paid"),
+          ne(debts.status, "canceled"),
+        ),
+      )
       .orderBy(asc(debts.name)),
     db
       .select()
@@ -35,6 +47,24 @@ export default async function DividasPage() {
       .orderBy(asc(debtInstallments.dueDate)),
     listarContas(workspace.workspaceId),
     listarMembrosSimples(workspace.workspaceId),
+    /**
+     * A ultima parcela PAGA de cada divida. E' o que o botao de desfazer
+     * precisa: sem ele, uma parcela quitada com valor ou conta errada nao
+     * teria caminho de volta pela interface.
+     *
+     * So' a ultima de cada uma: desfazer no meio deixaria a contagem de
+     * "quantas ja' paguei" furada.
+     */
+    db
+      .select()
+      .from(debtInstallments)
+      .where(
+        and(
+          eq(debtInstallments.workspaceId, workspace.workspaceId),
+          eq(debtInstallments.status, "paid"),
+        ),
+      )
+      .orderBy(desc(debtInstallments.number)),
   ]);
 
   const hoje = paraDataLocal();
@@ -80,6 +110,9 @@ export default async function DividasPage() {
             const pago = d.paidAmount;
             const restante = d.totalAmount - pago;
             const proxima = parcelas.find((p) => p.debtId === d.id);
+            // A lista de pagas ja' vem ordenada por numero decrescente, entao
+            // o primeiro achado e' a ultima parcela quitada desta divida.
+            const ultimaPaga = pagas.find((p) => p.debtId === d.id);
             const atrasada = proxima ? proxima.dueDate < hoje : false;
 
             return (
@@ -88,7 +121,7 @@ export default async function DividasPage() {
                 className="animate-[fade-up_0.4s_var(--ease-out-quint)_both]"
                 style={{ animationDelay: `${60 + i * 50}ms` }}
               >
-                <Card>
+                <Card className="group">
                   <CardContent className="p-5">
                     <div className="flex items-start gap-3.5">
                       <span
@@ -120,6 +153,21 @@ export default async function DividasPage() {
                         </p>
                         <p className="text-[11px] text-subtle">de {formatMoney(d.totalAmount)}</p>
                       </div>
+
+                      <AcoesDivida
+                        dataPadrao={hoje}
+                        temParceiro={membros.length > 1}
+                        divida={{
+                          id: d.id,
+                          nome: d.name,
+                          credor: d.creditor,
+                          parcelasTotal: d.installmentsTotal,
+                          parcelasPagas: d.installmentsPaid,
+                          valorParcela: proxima?.amount ?? 0,
+                          proximoVencimento: proxima?.dueDate ?? hoje,
+                          titularidade: d.ownerId === usuario.id ? "meu" : "conjunto",
+                        }}
+                      />
                     </div>
 
                     {/* progresso da quitacao */}
@@ -156,6 +204,17 @@ export default async function DividasPage() {
                           valor={proxima.amount}
                           contas={opcoesContas}
                         />
+                      </div>
+                    )}
+
+                    {/* `div`, e nao `p`: o botao de desfazer renderiza um
+                        `div` dentro, e `div` dentro de `p` e' HTML invalido —
+                        o navegador reescreve a arvore e o React acusa erro de
+                        hidratacao. */}
+                    {ultimaPaga && (
+                      <div className="mt-2.5 flex items-center justify-end gap-1.5 text-[11.5px] text-subtle">
+                        <span>Parcela {ultimaPaga.number} paga</span>
+                        <BotaoDesfazerParcela parcelaId={ultimaPaga.id} />
                       </div>
                     )}
                   </CardContent>

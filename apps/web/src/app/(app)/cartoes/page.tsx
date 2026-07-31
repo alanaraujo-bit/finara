@@ -1,7 +1,11 @@
 import { CreditCardIcon } from "@phosphor-icons/react/dist/ssr";
 import type { Metadata } from "next";
 import { BotaoPagar } from "@/components/cartoes/botao-pagar";
-import { FormCartao } from "@/components/cartoes/form-cartao";
+import {
+  AcoesCartao,
+  BotaoDesfazerFatura,
+  FormCartao,
+} from "@/components/cartoes/form-cartao";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -25,6 +29,8 @@ export default async function CartoesPage() {
     listarMembrosSimples(workspace.workspaceId),
   ]);
 
+  const opcoesContas = contas.map((c) => ({ id: c.id, nome: c.name }));
+
   const totalFaturas = cartoes.reduce((acc, c) => acc + c.faturaTotal, 0);
 
   return (
@@ -45,7 +51,7 @@ export default async function CartoesPage() {
           </p>
         </div>
         <FormCartao
-          contas={contas.map((c) => ({ id: c.id, nome: c.name }))}
+          contas={opcoesContas}
           temParceiro={membros.length > 1}
         />
       </header>
@@ -73,7 +79,7 @@ export default async function CartoesPage() {
                 className="animate-[fade-up_0.4s_var(--ease-out-quint)_both]"
                 style={{ animationDelay: `${60 + i * 50}ms` }}
               >
-                <Card className="overflow-hidden">
+                <Card className="group overflow-hidden">
                   <CardContent className="p-5">
                     <div className="flex items-start gap-3.5">
                       <span
@@ -107,6 +113,24 @@ export default async function CartoesPage() {
                           fecha dia {c.diaFechamento} · vence dia {c.diaVencimento}
                         </p>
                       </div>
+
+                      <AcoesCartao
+                        contas={opcoesContas}
+                        temParceiro={membros.length > 1}
+                        cartao={{
+                          id: c.id,
+                          nome: c.nome,
+                          bandeira: c.bandeira,
+                          final: c.finalCartao,
+                          limite: c.limite,
+                          diaFechamento: c.diaFechamento,
+                          diaVencimento: c.diaVencimento,
+                          contaPagamentoId: c.contaPagamentoId,
+                          titularidade: c.ownerId === usuario.id ? "meu" : "conjunto",
+                          // Uma fatura com valor ja' e' compra no historico.
+                          temCompras: c.faturaTotal > 0 || c.faturaId !== null,
+                        }}
+                      />
                     </div>
 
                     {/* ---------- fatura ---------- */}
@@ -129,6 +153,9 @@ export default async function CartoesPage() {
 
                         <div className="flex items-center gap-2">
                           {paga && <Badge tone="income">Paga</Badge>}
+                          {/* Desfazer o pagamento e' o que destrava corrigir
+                              uma compra que caiu numa fatura ja' quitada. */}
+                          {paga && c.faturaId && <BotaoDesfazerFatura faturaId={c.faturaId} />}
                           {!paga && c.faturaId && c.faturaTotal > 0 && (
                             <BotaoPagar
                               faturaId={c.faturaId}

@@ -79,6 +79,14 @@ export async function listarLancamentos({ workspaceId, limite = 50, offset = 0 }
       importado: sql<boolean>`${transactions.connectionId} is not null`,
       parcela: transactions.installmentNumber,
       parcelasTotal: transactions.installmentTotal,
+      // Os campos abaixo nao aparecem na lista: sao o que o formulario de
+      // edicao precisa para abrir ja' preenchido, sem uma segunda consulta
+      // por linha quando a pessoa clica em editar.
+      categoriaId: transactions.categoryId,
+      contaId: transactions.accountId,
+      cartaoId: transactions.cardId,
+      observacao: transactions.notes,
+      grupoParcelas: transactions.installmentGroupId,
     })
     .from(transactions)
     .leftJoin(categories, eq(categories.id, transactions.categoryId))

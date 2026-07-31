@@ -1,6 +1,7 @@
+import { and, db, eq, sql, transactions } from "@finara/db";
 import { BankIcon, WalletIcon } from "@phosphor-icons/react/dist/ssr";
 import type { Metadata } from "next";
-import { FormConta } from "@/components/contas/form-conta";
+import { AcoesConta, FormConta } from "@/components/contas/form-conta";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -25,10 +26,29 @@ const ROTULO_TIPO: Record<string, string> = {
 export default async function ContasPage() {
   const { usuario, workspace } = await exigirSessao();
 
-  const [contas, membros] = await Promise.all([
+  const [contas, membros, movimentadas] = await Promise.all([
     listarContas(workspace.workspaceId),
     listarMembrosSimples(workspace.workspaceId),
+    /**
+     * Quais contas ja' tem lancamento. So' isso decide se o botao de excluir
+     * aparece: as FKs sao `SET NULL`, entao apagar uma conta com movimento
+     * nao daria erro nenhum — soltaria os lancamentos em silencio e o extrato
+     * passaria a mostrar gastos sem origem. Oferecer um botao que a action
+     * vai recusar e' pior do que nao oferecer.
+     */
+    db
+      .select({ contaId: transactions.accountId, quantos: sql<number>`count(*)::int` })
+      .from(transactions)
+      .where(
+        and(
+          eq(transactions.workspaceId, workspace.workspaceId),
+          sql`${transactions.accountId} is not null`,
+        ),
+      )
+      .groupBy(transactions.accountId),
   ]);
+
+  const comLancamento = new Set(movimentadas.map((m) => m.contaId));
 
   const total = contas
     .filter((c) => !c.excludeFromTotals)
@@ -72,7 +92,7 @@ export default async function ContasPage() {
               className="animate-[fade-up_0.4s_var(--ease-out-quint)_both]"
               style={{ animationDelay: `${60 + i * 40}ms` }}
             >
-              <Card className="h-full transition-shadow hover:shadow-sm">
+              <Card className="group h-full transition-shadow hover:shadow-sm">
                 <CardContent className="flex items-start gap-3.5 p-5">
                   <span
                     className="grid size-10 shrink-0 place-items-center rounded-xl"
@@ -88,16 +108,31 @@ export default async function ContasPage() {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-start justify-between gap-2">
                       <p className="truncate text-[14px] font-semibold text-text">{c.name}</p>
-                      {/* ownerId nulo = conta do casal. */}
-                      {membros.length > 1 && (
-                        <Badge tone={c.ownerId === null ? "primary" : "neutral"}>
-                          {c.ownerId === null
-                            ? "Conjunta"
-                            : c.ownerId === usuario.id
-                              ? "Minha"
-                              : "Do parceiro"}
-                        </Badge>
-                      )}
+                      <div className="flex shrink-0 items-center gap-1.5">
+                        {/* ownerId nulo = conta do casal. */}
+                        {membros.length > 1 && (
+                          <Badge tone={c.ownerId === null ? "primary" : "neutral"}>
+                            {c.ownerId === null
+                              ? "Conjunta"
+                              : c.ownerId === usuario.id
+                                ? "Minha"
+                                : "Do parceiro"}
+                          </Badge>
+                        )}
+                        <AcoesConta
+                          temParceiro={membros.length > 1}
+                          conta={{
+                            id: c.id,
+                            nome: c.name,
+                            tipo: c.type,
+                            instituicao: c.institution,
+                            titularidade: c.ownerId === null ? "conjunta" : "minha",
+                            saldo: c.currentBalance,
+                            arquivada: c.isArchived,
+                            temLancamentos: comLancamento.has(c.id),
+                          }}
+                        />
+                      </div>
                     </div>
 
                     <p className="mt-0.5 text-[11.5px] text-subtle">

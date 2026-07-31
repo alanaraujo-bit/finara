@@ -1,0 +1,1 @@
+ALTER TYPE "public"."debt_status" ADD VALUE 'canceled';
