@@ -1,20 +1,56 @@
 "use client";
 
-import { PlusIcon } from "@phosphor-icons/react";
+import { PlusIcon, SignOutIcon } from "@phosphor-icons/react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import type { ReactNode } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useState, type ReactNode } from "react";
 import { Logo, Wordmark } from "@/components/logo";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { signOut } from "@/lib/auth-client";
 import { mobileNavItems, navigation } from "@/lib/navigation";
 import { cn } from "@/lib/utils";
+
+export type UsuarioShell = { nome: string; email: string };
+export type WorkspaceShell = { nome: string; apelido: string | null };
 
 function isActive(pathname: string, href: string) {
   return href === "/" ? pathname === "/" : pathname.startsWith(href);
 }
 
+/** Iniciais para o avatar: "Alan Vitor" -> "AV", "Alan" -> "AL". */
+function iniciais(nome: string): string {
+  const partes = nome.trim().split(/\s+/).filter(Boolean);
+  if (partes.length === 0) return "?";
+  if (partes.length === 1) return partes[0]!.slice(0, 2).toUpperCase();
+  return (partes[0]![0]! + partes[partes.length - 1]![0]!).toUpperCase();
+}
+
+function BotaoSair() {
+  const router = useRouter();
+  const [saindo, setSaindo] = useState(false);
+
+  return (
+    <button
+      type="button"
+      aria-label="Sair da conta"
+      disabled={saindo}
+      onClick={async () => {
+        setSaindo(true);
+        await signOut();
+        // refresh() garante que o layout do servidor reavalie a sessao;
+        // sem ele o usuario continuaria vendo a tela ate' recarregar na mao.
+        router.push("/entrar");
+        router.refresh();
+      }}
+      className="grid size-9 place-items-center rounded-lg text-muted transition-colors hover:bg-surface-2 hover:text-expense disabled:opacity-50"
+    >
+      <SignOutIcon size={18} weight="duotone" />
+    </button>
+  );
+}
+
 /** Sidebar do desktop. Some abaixo de lg, onde entra a barra inferior. */
-function Sidebar() {
+function Sidebar({ usuario, workspace }: { usuario: UsuarioShell; workspace: WorkspaceShell }) {
   const pathname = usePathname();
 
   return (
@@ -65,17 +101,22 @@ function Sidebar() {
       </nav>
 
       <div className="border-t border-border p-3">
-        <div className="flex items-center justify-between gap-2 rounded-xl px-2 py-1.5">
+        <div className="flex items-center justify-between gap-1 rounded-xl px-2 py-1.5">
           <div className="flex min-w-0 items-center gap-2.5">
             <div className="grid size-8 shrink-0 place-items-center rounded-full bg-primary-soft text-[11px] font-semibold text-primary-soft-fg">
-              AL
+              {iniciais(usuario.nome)}
             </div>
             <div className="min-w-0">
-              <p className="truncate text-[13px] font-medium text-text">Alan</p>
-              <p className="truncate text-[11px] text-subtle">Espaço pessoal</p>
+              <p className="truncate text-[13px] font-medium text-text">
+                {workspace.apelido ?? usuario.nome}
+              </p>
+              <p className="truncate text-[11px] text-subtle">{workspace.nome}</p>
             </div>
           </div>
-          <ThemeToggle />
+          <div className="flex shrink-0 items-center">
+            <ThemeToggle />
+            <BotaoSair />
+          </div>
         </div>
       </div>
     </aside>
@@ -160,10 +201,18 @@ function MobileNavItem({
   );
 }
 
-export function AppShell({ children }: { children: ReactNode }) {
+export function AppShell({
+  children,
+  usuario,
+  workspace,
+}: {
+  children: ReactNode;
+  usuario: UsuarioShell;
+  workspace: WorkspaceShell;
+}) {
   return (
     <div className="min-h-dvh">
-      <Sidebar />
+      <Sidebar usuario={usuario} workspace={workspace} />
       <MobileHeader />
       {/* pb-24 no celular reserva o espaco da barra inferior. */}
       <main className="pb-24 lg:pb-0 lg:pl-[248px]">{children}</main>
