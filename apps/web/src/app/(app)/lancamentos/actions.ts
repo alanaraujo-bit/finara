@@ -1,11 +1,11 @@
 "use server";
 
-import { and, db, eq, financialAccounts, sql, transactions } from "@finara/db";
+import { and, creditCards, db, eq, financialAccounts, sql, transactions } from "@finara/db";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { paraDataLocal } from "@/lib/datas";
 import { newId } from "@/lib/id";
 import { parseMoney } from "@/lib/money";
+import { garantirFaturaDaCompra } from "@/lib/queries/cartoes";
 import { exigirSessao } from "@/lib/session";
 
 const esquema = z.object({
@@ -14,7 +14,9 @@ const esquema = z.object({
   descricao: z.string().trim().min(1, "Descreva o lançamento.").max(120),
   data: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Data inválida."),
   categoriaId: z.string().optional(),
-  contaId: z.string().optional(),
+  // "conta:<id>" ou "cartao:<id>". Um campo so' no formulario evita o estado
+  // invalido de ter conta E cartao preenchidos ao mesmo tempo.
+  origem: z.string().optional(),
   titularidade: z.enum(["conjunto", "meu"]),
   observacao: z.string().trim().max(500).optional(),
 });
@@ -41,7 +43,7 @@ export async function criarLancamento(
     descricao: form.get("descricao"),
     data: form.get("data"),
     categoriaId: form.get("categoriaId") || undefined,
-    contaId: form.get("contaId") || undefined,
+    origem: form.get("origem") || undefined,
     titularidade: form.get("titularidade"),
     observacao: form.get("observacao") || undefined,
   });
@@ -50,7 +52,7 @@ export async function criarLancamento(
     return { erro: parsed.error.issues[0]?.message ?? "Dados inválidos." };
   }
 
-  const { tipo, valor, descricao, data, categoriaId, contaId, titularidade, observacao } =
+  const { tipo, valor, descricao, data, categoriaId, origem, titularidade, observacao } =
     parsed.data;
 
   const centavos = parseMoney(valor);
@@ -59,25 +61,61 @@ export async function criarLancamento(
     return { erro: "O valor precisa ser maior que zero." };
   }
 
-  // A conta precisa ser deste workspace; id vindo do formulario nao e' confiavel.
+  const [genero, alvoId] = (origem ?? "").split(":");
+
   let contaValida: string | null = null;
-  if (contaId) {
-    const [conta] = await db
+  let cartao: { id: string; fechamento: number; vencimento: number } | null = null;
+
+  // Id vindo do formulario nao e' confiavel: sempre confirmar que pertence
+  // a este workspace antes de usar.
+  if (genero === "conta" && alvoId) {
+    const [c] = await db
       .select({ id: financialAccounts.id })
       .from(financialAccounts)
       .where(
         and(
-          eq(financialAccounts.id, contaId),
+          eq(financialAccounts.id, alvoId),
           eq(financialAccounts.workspaceId, workspace.workspaceId),
         ),
       )
       .limit(1);
 
-    if (!conta) return { erro: "Conta não encontrada." };
-    contaValida = conta.id;
+    if (!c) return { erro: "Conta não encontrada." };
+    contaValida = c.id;
+  } else if (genero === "cartao" && alvoId) {
+    const [c] = await db
+      .select({
+        id: creditCards.id,
+        fechamento: creditCards.closingDay,
+        vencimento: creditCards.dueDay,
+      })
+      .from(creditCards)
+      .where(
+        and(eq(creditCards.id, alvoId), eq(creditCards.workspaceId, workspace.workspaceId)),
+      )
+      .limit(1);
+
+    if (!c) return { erro: "Cartão não encontrado." };
+    if (tipo === "income") {
+      return { erro: "Cartão de crédito só recebe despesas. Escolha uma conta para entradas." };
+    }
+    cartao = c;
   }
 
   await db.transaction(async (tx) => {
+    // Compra no cartao entra na fatura do ciclo correspondente — e NAO mexe
+    // no saldo da conta. O dinheiro so' sai quando a fatura e' paga.
+    const invoiceId = cartao
+      ? await garantirFaturaDaCompra({
+          workspaceId: workspace.workspaceId,
+          cardId: cartao.id,
+          dataCompra: data,
+          diaFechamento: cartao.fechamento,
+          diaVencimento: cartao.vencimento,
+          executor: tx as unknown as typeof db,
+        })
+      : null;
+
     await tx.insert(transactions).values({
       id: newId(),
       workspaceId: workspace.workspaceId,
@@ -89,6 +127,8 @@ export async function criarLancamento(
       notes: observacao ?? null,
       date: data,
       accountId: contaValida,
+      cardId: cartao?.id ?? null,
+      invoiceId,
       categoryId: categoriaId || null,
       ownerId: titularidade === "conjunto" ? null : usuario.id,
     });
@@ -104,6 +144,8 @@ export async function criarLancamento(
         .where(eq(financialAccounts.id, contaValida));
     }
   });
+
+  revalidatePath("/cartoes");
 
   revalidatePath("/lancamentos");
   revalidatePath("/");

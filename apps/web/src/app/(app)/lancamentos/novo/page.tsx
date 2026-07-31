@@ -4,6 +4,7 @@ import Link from "next/link";
 import { FormLancamento } from "@/components/lancamentos/form-lancamento";
 import { Card, CardContent } from "@/components/ui/card";
 import { paraDataLocal } from "@/lib/datas";
+import { listarCartoes } from "@/lib/queries/cartoes";
 import { listarCategorias, listarContas, listarMembrosSimples } from "@/lib/queries/contas";
 import { exigirSessao } from "@/lib/session";
 
@@ -14,8 +15,9 @@ export const metadata: Metadata = {
 export default async function NovoLancamentoPage() {
   const { workspace } = await exigirSessao();
 
-  const [contas, categorias, membros] = await Promise.all([
+  const [contas, cartoes, categorias, membros] = await Promise.all([
     listarContas(workspace.workspaceId),
+    listarCartoes(workspace.workspaceId),
     listarCategorias(workspace.workspaceId),
     listarMembrosSimples(workspace.workspaceId),
   ]);
@@ -39,6 +41,7 @@ export default async function NovoLancamentoPage() {
         <CardContent className="p-5 sm:p-6">
           <FormLancamento
             contas={contas.map((c) => ({ id: c.id, nome: c.name }))}
+            cartoes={cartoes.map((c) => ({ id: c.id, nome: c.nome }))}
             categorias={categorias.map((c) => ({ id: c.id, nome: c.nome, tipo: c.tipo }))}
             dataPadrao={paraDataLocal()}
             temParceiro={membros.length > 1}

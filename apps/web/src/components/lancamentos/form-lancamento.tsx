@@ -12,11 +12,13 @@ type Opcao = { id: string; nome: string; tipo?: string };
 
 export function FormLancamento({
   contas,
+  cartoes,
   categorias,
   dataPadrao,
   temParceiro,
 }: {
   contas: Opcao[];
+  cartoes: Opcao[];
   categorias: (Opcao & { tipo: string })[];
   dataPadrao: string;
   temParceiro: boolean;
@@ -115,19 +117,41 @@ export function FormLancamento({
       </div>
 
       <div>
-        <Label htmlFor="contaId">Conta</Label>
-        <Select id="contaId" name="contaId" disabled={pendente} defaultValue="">
-          <option value="">Sem conta (não afeta saldo)</option>
-          {contas.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.nome}
-            </option>
-          ))}
+        <Label htmlFor="origem">De onde saiu</Label>
+        {/* Um campo so' para conta e cartao: como sao mutuamente exclusivos,
+            dois selects permitiriam preencher os dois e criar estado invalido. */}
+        <Select id="origem" name="origem" disabled={pendente} defaultValue="">
+          <option value="">Não vincular (não afeta saldo)</option>
+          {contas.length > 0 && (
+            <optgroup label="Contas">
+              {contas.map((c) => (
+                <option key={c.id} value={`conta:${c.id}`}>
+                  {c.nome}
+                </option>
+              ))}
+            </optgroup>
+          )}
+          {cartoes.length > 0 && tipo === "expense" && (
+            <optgroup label="Cartões de crédito">
+              {cartoes.map((c) => (
+                <option key={c.id} value={`cartao:${c.id}`}>
+                  {c.nome}
+                </option>
+              ))}
+            </optgroup>
+          )}
         </Select>
-        {contas.length === 0 && (
+
+        {contas.length === 0 && cartoes.length === 0 && (
           <p className="mt-1.5 text-[12.5px] text-muted">
-            Você ainda não tem contas. O lançamento é registrado mesmo assim, mas nenhum saldo é
-            movimentado.
+            Você ainda não tem contas nem cartões. O lançamento é registrado mesmo assim, mas nenhum
+            saldo é movimentado.
+          </p>
+        )}
+        {cartoes.length > 0 && tipo === "expense" && (
+          <p className="mt-1.5 text-[12.5px] text-muted">
+            Compra no cartão entra na fatura do ciclo e não altera o saldo agora — o dinheiro sai
+            quando a fatura for paga.
           </p>
         )}
       </div>
