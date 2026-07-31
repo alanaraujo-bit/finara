@@ -1,0 +1,11 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+
+# esbuild: usado pelo drizzle-kit
+# sharp: otimizacao de imagens do Next
+# unrs-resolver: resolver do eslint
+allowBuilds:
+  esbuild: true
+  sharp: true
+  unrs-resolver: true

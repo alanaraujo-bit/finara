@@ -1,0 +1,9 @@
+# Normaliza quebra de linha: LF no repositorio, nativo no disco.
+# Sem isto, o mesmo arquivo aparece "todo alterado" entre Windows e o build da Vercel.
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.ico binary
+*.woff binary
+*.woff2 binary

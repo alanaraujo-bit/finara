@@ -1,0 +1,29 @@
+node_modules/
+.pnpm-store/
+
+# builds
+.next/
+out/
+dist/
+build/
+*.tsbuildinfo
+next-env.d.ts
+
+# ambiente — nunca commitar credenciais do Railway
+.env
+.env.*
+!.env.example
+
+# plataformas
+.vercel/
+.railway/
+
+# sistema
+.DS_Store
+Thumbs.db
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Nota: apps/web/public/sw.js NAO entra aqui — o service worker e' escrito
+# a mao e versionado, nao gerado por build.
