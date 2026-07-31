@@ -2,10 +2,9 @@ import { and, asc, db, desc, eq, ne, receivables } from "@finara/db";
 import { HandCoinsIcon } from "@phosphor-icons/react/dist/ssr";
 import type { Metadata } from "next";
 import {
-  AcoesRecebivel,
   BotaoDesfazerRecebimento,
-  BotaoReceber,
   FormRecebivel,
+  LinhaRecebivel,
 } from "@/components/a-receber/painel-receber";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -98,8 +97,19 @@ export default async function AReceberPage() {
             const atrasado = r.dueDate ? r.dueDate < hoje : false;
 
             return (
-              <li
+              <LinhaRecebivel
                 key={r.id}
+                temParceiro={membros.length > 1}
+                contas={opcoesContas}
+                valorEmAberto={r.amount - r.receivedAmount}
+                recebivel={{
+                  id: r.id,
+                  nome: r.name,
+                  devedor: r.debtor,
+                  valor: r.amount,
+                  vencimento: r.dueDate,
+                  titularidade: r.ownerId === usuario.id ? "meu" : "conjunto",
+                }}
                 className="animate-[fade-up_0.4s_var(--ease-out-quint)_both]"
                 style={{ animationDelay: `${60 + i * 40}ms` }}
               >
@@ -128,27 +138,9 @@ export default async function AReceberPage() {
                     <span className="tabular shrink-0 text-[15px] font-semibold text-income">
                       {formatMoney(r.amount - r.receivedAmount)}
                     </span>
-
-                    <BotaoReceber
-                      id={r.id}
-                      valor={r.amount - r.receivedAmount}
-                      contas={opcoesContas}
-                    />
-
-                    <AcoesRecebivel
-                      temParceiro={membros.length > 1}
-                      recebivel={{
-                        id: r.id,
-                        nome: r.name,
-                        devedor: r.debtor,
-                        valor: r.amount,
-                        vencimento: r.dueDate,
-                        titularidade: r.ownerId === usuario.id ? "meu" : "conjunto",
-                      }}
-                    />
                   </CardContent>
                 </Card>
-              </li>
+              </LinhaRecebivel>
             );
           })}
         </ul>

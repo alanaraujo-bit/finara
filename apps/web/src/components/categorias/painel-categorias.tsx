@@ -7,8 +7,7 @@ import {
   PlusIcon,
   TrashIcon,
 } from "@phosphor-icons/react";
-import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import {
   arquivarCategoria,
   excluirCategoria,
@@ -16,10 +15,11 @@ import {
 } from "@/app/(app)/categorias/actions";
 import { FormCategoria } from "@/components/categorias/form-categoria";
 import { IconeCategoria } from "@/components/categorias/icone-categoria";
+import type { Acao } from "@/components/ui/acoes-linha";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Carregando } from "@/components/ui/carregando";
+import { LinhaDeslizante } from "@/components/ui/linha-deslizante";
 import type { CategoriaDaTela } from "@/lib/queries/categorias";
 import { formatMoney } from "@/lib/money";
 import { cn } from "@/lib/utils";
@@ -162,13 +162,53 @@ function Linha({
   const usoDoTeto = c.tetoMensal && c.tetoMensal > 0 ? (c.noMes / c.tetoMensal) * 100 : null;
   const estourou = usoDoTeto !== null && usoDoTeto > 100;
 
+  const podeExcluir = !c.padrao && c.lancamentos === 0;
+
   return (
-    <div
-      className={cn(
-        "group flex items-center gap-3.5 px-4 py-3 transition-colors",
-        c.arquivada ? "opacity-60" : "hover:bg-surface-2/60",
-      )}
+    <LinhaDeslizante
+      as="div"
+      acoes={[
+        {
+          rotulo: "Editar categoria",
+          icone: <PencilSimpleIcon size={15} weight="bold" />,
+          aoClicar: () => aoEditar(c.id),
+        },
+        c.arquivada
+          ? {
+              rotulo: "Restaurar categoria",
+              icone: <ArrowCounterClockwiseIcon size={15} weight="bold" />,
+              executar: () => restaurarCategoria(c.id),
+            }
+          : {
+              rotulo: "Arquivar categoria",
+              icone: <ArchiveIcon size={15} weight="bold" />,
+              executar: () => arquivarCategoria(c.id),
+            },
+        // Excluir só quando a categoria pode mesmo ser excluída (não é padrão
+        // e não tem lançamento). Nos outros casos o caminho é arquivar, e a
+        // ação ausente evita prometer o que a action vai recusar.
+        ...(podeExcluir
+          ? [
+              {
+                rotulo: "Excluir categoria",
+                icone: <TrashIcon size={15} weight="bold" />,
+                perigo: true,
+                confirmar: "Excluir?",
+                executar: () => excluirCategoria(c.id),
+              } satisfies Acao,
+            ]
+          : []),
+      ]}
     >
+      {/* Sem tinta de hover, pelo mesmo motivo do extrato: o degradê da pílula
+          de ações é `--surface`, e um fundo que muda por baixo dela apareceria
+          como faixa de cor errada. */}
+      <div
+        className={cn(
+          "flex items-center gap-3.5 bg-surface px-4 py-3 transition-opacity",
+          c.arquivada && "opacity-60",
+        )}
+      >
       <span
         className="grid size-10 shrink-0 place-items-center rounded-xl"
         style={{ background: `${c.cor}1f`, color: c.cor }}
@@ -219,135 +259,7 @@ function Linha({
       >
         {formatMoney(c.noMes)}
       </p>
-
-      <Acoes categoria={c} aoEditar={() => aoEditar(c.id)} />
-    </div>
-  );
-}
-
-/**
- * Editar, arquivar/restaurar e excluir. Excluir so' aparece quando a categoria
- * pode mesmo ser excluida (nao e' padrao e nao tem lancamento); nos outros
- * casos o caminho e' arquivar, e o botao ausente evita prometer o que a action
- * vai recusar.
- */
-function Acoes({ categoria: c, aoEditar }: { categoria: CategoriaDaTela; aoEditar: () => void }) {
-  const router = useRouter();
-  const [pendente, iniciar] = useTransition();
-  const [confirmando, setConfirmando] = useState(false);
-  const [erro, setErro] = useState<string | null>(null);
-
-  const podeExcluir = !c.padrao && c.lancamentos === 0;
-
-  function executar(acao: () => Promise<{ erro?: string }>) {
-    setErro(null);
-    iniciar(async () => {
-      const r = await acao();
-      if (r?.erro) setErro(r.erro);
-      else router.refresh();
-    });
-  }
-
-  if (erro) {
-    return (
-      <div className="flex max-w-[240px] items-center gap-2">
-        <p role="alert" className="text-right text-[11.5px] leading-snug text-expense">
-          {erro}
-        </p>
-        <Button variant="ghost" size="sm" onClick={() => setErro(null)}>
-          Ok
-        </Button>
       </div>
-    );
-  }
-
-  if (confirmando) {
-    return (
-      <div className="flex items-center gap-1.5">
-        <span className="text-[11.5px] text-muted">Excluir?</span>
-        <Button
-          variant="danger"
-          size="sm"
-          disabled={pendente}
-          onClick={() => executar(() => excluirCategoria(c.id))}
-        >
-          Sim
-        </Button>
-        <Button variant="ghost" size="sm" onClick={() => setConfirmando(false)}>
-          Não
-        </Button>
-      </div>
-    );
-  }
-
-  return (
-    <div
-      className={cn(
-        "flex shrink-0 items-center gap-0.5 transition-opacity duration-200",
-        // No celular nao ha' hover: os botoes ficam sempre visiveis.
-        "sm:opacity-0 sm:group-hover:opacity-100 sm:focus-within:opacity-100",
-      )}
-    >
-      {pendente ? (
-        <span className="grid size-8 place-items-center text-subtle">
-          <Carregando size={15} rotulo={null} />
-        </span>
-      ) : (
-        <>
-          <BotaoIcone rotulo="Editar categoria" onClick={aoEditar}>
-            <PencilSimpleIcon size={15} weight="bold" />
-          </BotaoIcone>
-
-          {c.arquivada ? (
-            <BotaoIcone
-              rotulo="Restaurar categoria"
-              onClick={() => executar(() => restaurarCategoria(c.id))}
-            >
-              <ArrowCounterClockwiseIcon size={15} weight="bold" />
-            </BotaoIcone>
-          ) : (
-            <BotaoIcone
-              rotulo="Arquivar categoria"
-              onClick={() => executar(() => arquivarCategoria(c.id))}
-            >
-              <ArchiveIcon size={15} weight="bold" />
-            </BotaoIcone>
-          )}
-
-          {podeExcluir && (
-            <BotaoIcone rotulo="Excluir categoria" perigo onClick={() => setConfirmando(true)}>
-              <TrashIcon size={15} weight="bold" />
-            </BotaoIcone>
-          )}
-        </>
-      )}
-    </div>
-  );
-}
-
-function BotaoIcone({
-  rotulo,
-  onClick,
-  perigo,
-  children,
-}: {
-  rotulo: string;
-  onClick: () => void;
-  perigo?: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      title={rotulo}
-      aria-label={rotulo}
-      onClick={onClick}
-      className={cn(
-        "grid size-8 place-items-center rounded-lg text-subtle transition-colors",
-        perigo ? "hover:bg-surface-2 hover:text-expense" : "hover:bg-surface-2 hover:text-text",
-      )}
-    >
-      {children}
-    </button>
+    </LinhaDeslizante>
   );
 }

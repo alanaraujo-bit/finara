@@ -4,6 +4,7 @@ import { useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Carregando } from "@/components/ui/carregando";
+import { TATO, vibrar } from "@/lib/tato";
 import { cn } from "@/lib/utils";
 
 /**
@@ -28,6 +29,15 @@ import { cn } from "@/lib/utils";
  * 3. **Botão que a action vai recusar não é oferecido.** Quem monta a lista
  *    calcula se dá pra excluir e simplesmente não passa a ação — prometer e
  *    depois recusar é pior que não oferecer.
+ *
+ * ---
+ *
+ * **No celular estes botões não aparecem.** Quem serve o toque é a gaveta de
+ * `linha-deslizante.tsx`, aberta arrastando a linha para o lado. As duas usam
+ * o mesmo `useAcoes` abaixo, então a máquina de estados — confirmar, pendente,
+ * erro — é uma só; o que muda é só a forma. Uma some por CSS quando a outra
+ * aparece (`pointer: coarse` / `pointer: fine`), então em cada aparelho existe
+ * exatamente um caminho, inclusive para leitor de tela.
  */
 
 export type Acao = {
@@ -41,11 +51,29 @@ export type Acao = {
   | { executar: () => Promise<{ erro?: string } | void>; aoClicar?: never }
 );
 
-export function AcoesLinha({ acoes, className }: { acoes: Acao[]; className?: string }) {
+/**
+ * A máquina de estados que as duas formas compartilham.
+ *
+ * Fica aqui, e não em cada renderizador, porque o estado é o que tem regra de
+ * dinheiro dentro: a confirmação que não pode ser pulada, o erro da action que
+ * não pode ser engolido, o pendente que impede o toque duplo virar duas
+ * exclusões. Desenho é o que difere entre celular e desktop — isto não.
+ */
+export function useAcoes() {
   const router = useRouter();
   const [pendente, iniciar] = useTransition();
   const [confirmando, setConfirmando] = useState<Acao | null>(null);
   const [erro, setErro] = useState<string | null>(null);
+
+  /** Toque num botão: pede confirmação se a ação exigir, senão dispara. */
+  function tocar(acao: Acao) {
+    if (acao.confirmar) {
+      vibrar(TATO.leve);
+      setConfirmando(acao);
+      return;
+    }
+    disparar(acao);
+  }
 
   function disparar(acao: Acao) {
     if (acao.aoClicar) {
@@ -56,18 +84,57 @@ export function AcoesLinha({ acoes, className }: { acoes: Acao[]; className?: st
     setConfirmando(null);
     iniciar(async () => {
       const r = await acao.executar!();
-      if (r?.erro) setErro(r.erro);
-      else router.refresh();
+      if (r?.erro) {
+        setErro(r.erro);
+      } else {
+        vibrar(TATO.concluido);
+        router.refresh();
+      }
     });
   }
 
+  return {
+    pendente,
+    confirmando,
+    erro,
+    tocar,
+    disparar,
+    limparErro: () => setErro(null),
+    cancelarConfirmacao: () => setConfirmando(null),
+  };
+}
+
+/**
+ * Forma de desktop: ícones discretos que aparecem no hover da linha.
+ *
+ * `pointer-coarse:hidden` é o que impede a duplicata no celular — lá a gaveta
+ * de arrasto é quem responde, e dois caminhos para a mesma ação confundiriam
+ * tanto o dedo quanto o leitor de tela.
+ */
+export function AcoesLinha({
+  acoes,
+  className,
+  sempreVisivel = false,
+}: {
+  acoes: Acao[];
+  className?: string;
+  /**
+   * Dispensa o hover. Para quando quem controla a revelação é o container —
+   * é o caso de `LinhaDeslizante`, que faz o grupo inteiro aparecer junto —
+   * ou quando a ação é a única coisa na linha e esconder não faria sentido.
+   */
+  sempreVisivel?: boolean;
+}) {
+  const { pendente, confirmando, erro, tocar, disparar, limparErro, cancelarConfirmacao } =
+    useAcoes();
+
   if (erro) {
     return (
-      <div className={cn("flex max-w-[300px] items-start gap-2", className)}>
+      <div className={cn("flex max-w-[300px] items-start gap-2 pointer-coarse:hidden", className)}>
         <p role="alert" className="text-right text-[11.5px] leading-snug text-expense">
           {erro}
         </p>
-        <Button variant="ghost" size="sm" onClick={() => setErro(null)}>
+        <Button variant="ghost" size="sm" onClick={limparErro}>
           Ok
         </Button>
       </div>
@@ -76,7 +143,7 @@ export function AcoesLinha({ acoes, className }: { acoes: Acao[]; className?: st
 
   if (confirmando) {
     return (
-      <div className={cn("flex shrink-0 items-center gap-1.5", className)}>
+      <div className={cn("flex shrink-0 items-center gap-1.5 pointer-coarse:hidden", className)}>
         <span className="text-[11.5px] text-muted">{confirmando.confirmar}</span>
         <Button
           variant={confirmando.perigo ? "danger" : "primary"}
@@ -86,7 +153,7 @@ export function AcoesLinha({ acoes, className }: { acoes: Acao[]; className?: st
         >
           Sim
         </Button>
-        <Button variant="ghost" size="sm" onClick={() => setConfirmando(null)}>
+        <Button variant="ghost" size="sm" onClick={cancelarConfirmacao}>
           Não
         </Button>
       </div>
@@ -95,7 +162,12 @@ export function AcoesLinha({ acoes, className }: { acoes: Acao[]; className?: st
 
   if (pendente) {
     return (
-      <span className={cn("grid size-8 shrink-0 place-items-center text-subtle", className)}>
+      <span
+        className={cn(
+          "grid size-8 shrink-0 place-items-center text-subtle pointer-coarse:hidden",
+          className,
+        )}
+      >
         <Carregando size={15} rotulo={null} />
       </span>
     );
@@ -104,9 +176,9 @@ export function AcoesLinha({ acoes, className }: { acoes: Acao[]; className?: st
   return (
     <div
       className={cn(
-        "flex shrink-0 items-center gap-0.5 transition-opacity duration-200",
-        // No celular não existe hover: os botões ficam sempre visíveis.
-        "sm:opacity-0 sm:group-hover:opacity-100 sm:focus-within:opacity-100",
+        "flex shrink-0 items-center gap-0.5 pointer-coarse:hidden",
+        !sempreVisivel &&
+          "opacity-0 transition-opacity duration-200 group-hover:opacity-100 focus-within:opacity-100",
         className,
       )}
     >
@@ -115,7 +187,7 @@ export function AcoesLinha({ acoes, className }: { acoes: Acao[]; className?: st
           key={acao.rotulo}
           rotulo={acao.rotulo}
           perigo={acao.perigo}
-          onClick={() => (acao.confirmar ? setConfirmando(acao) : disparar(acao))}
+          onClick={() => tocar(acao)}
         >
           {acao.icone}
         </BotaoIcone>

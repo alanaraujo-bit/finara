@@ -8,7 +8,7 @@ import {
   TrashIcon,
 } from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
-import { useActionState, useState } from "react";
+import { useActionState, useState, type CSSProperties, type ReactNode } from "react";
 import {
   arquivarCartao,
   criarCartao,
@@ -17,13 +17,15 @@ import {
   excluirCartao,
   type EstadoCartao,
 } from "@/app/(app)/cartoes/actions";
-import { AcoesLinha } from "@/components/ui/acoes-linha";
+import { AcoesLinha, type Acao } from "@/components/ui/acoes-linha";
 import { Button } from "@/components/ui/button";
 import { Carregando } from "@/components/ui/carregando";
 import { FieldError, Input, Label } from "@/components/ui/input";
+import { LinhaDeslizante } from "@/components/ui/linha-deslizante";
 import { Modal } from "@/components/ui/modal";
 import { formatMoneyBare } from "@/lib/money";
 import { SegmentedField, Select } from "@/components/ui/select";
+import { cn } from "@/lib/utils";
 
 const BANDEIRAS = ["Visa", "Mastercard", "Elo", "American Express", "Hipercard", "Outra"];
 const DIAS = Array.from({ length: 31 }, (_, i) => i + 1);
@@ -311,25 +313,66 @@ function Campos({
 
 
 /**
- * Acoes do cartao: editar, arquivar e excluir.
+ * A LINHA de um cartão.
  *
- * Excluir so' aparece quando nenhuma compra passou pelo cartao —
- * `transactions.cardId` e' `SET NULL`, entao apagar um cartao com movimento
- * soltaria as compras em silencio e elas virariam gastos sem origem.
+ * Aqui a gaveta serve só a manutenção do cadastro — editar, arquivar,
+ * excluir. Pagar a fatura NÃO virou gesto de propósito: é a operação que mais
+ * mexe em dinheiro na tela inteira (debita a conta de verdade), acontece uma
+ * vez por mês e precisa do valor à vista na hora de decidir. Ação assim merece
+ * um botão explícito, no bloco da fatura, onde o número está. Gesto é para o
+ * que se repete, não para o que é grave.
+ *
+ * Excluir só aparece quando nenhuma compra passou pelo cartão —
+ * `transactions.cardId` é `SET NULL`, então apagar um cartão com movimento
+ * soltaria as compras em silêncio e elas virariam gastos sem origem.
  */
-export function AcoesCartao({
+export function LinhaCartao({
   cartao,
   contas,
   temParceiro,
+  children,
+  className,
+  style,
 }: {
   cartao: CartaoEditavel;
   contas: { id: string; nome: string }[];
   temParceiro: boolean;
+  children: ReactNode;
+  className?: string;
+  style?: CSSProperties;
 }) {
   const [editando, setEditando] = useState(false);
 
   return (
-    <>
+    <LinhaDeslizante
+      as="li"
+      className={cn("rounded-2xl", className)}
+      style={style}
+      acoes={[
+        {
+          rotulo: "Editar cartão",
+          icone: <PencilSimpleIcon size={15} weight="bold" />,
+          aoClicar: () => setEditando(true),
+        },
+        {
+          rotulo: "Arquivar cartão",
+          icone: <ArchiveIcon size={15} weight="bold" />,
+          confirmar: "Arquivar?",
+          executar: () => arquivarCartao(cartao.id, true),
+        },
+        ...(cartao.temCompras
+          ? []
+          : [
+              {
+                rotulo: "Excluir cartão",
+                icone: <TrashIcon size={15} weight="bold" />,
+                perigo: true,
+                confirmar: "Excluir?",
+                executar: () => excluirCartao(cartao.id),
+              } satisfies Acao,
+            ]),
+      ]}
+    >
       <FormCartao
         contas={contas}
         temParceiro={temParceiro}
@@ -337,33 +380,8 @@ export function AcoesCartao({
         aberto={editando}
         aoFechar={() => setEditando(false)}
       />
-      <AcoesLinha
-        acoes={[
-          {
-            rotulo: "Editar cartão",
-            icone: <PencilSimpleIcon size={15} weight="bold" />,
-            aoClicar: () => setEditando(true),
-          },
-          {
-            rotulo: "Arquivar cartão",
-            icone: <ArchiveIcon size={15} weight="bold" />,
-            confirmar: "Arquivar?",
-            executar: () => arquivarCartao(cartao.id, true),
-          },
-          ...(cartao.temCompras
-            ? []
-            : [
-                {
-                  rotulo: "Excluir cartão",
-                  icone: <TrashIcon size={15} weight="bold" />,
-                  perigo: true,
-                  confirmar: "Excluir?",
-                  executar: () => excluirCartao(cartao.id),
-                },
-              ]),
-        ]}
-      />
-    </>
+      {children}
+    </LinhaDeslizante>
   );
 }
 

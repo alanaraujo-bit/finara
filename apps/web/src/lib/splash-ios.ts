@@ -29,16 +29,36 @@ export type AparelhoIOS = {
 };
 
 export const APARELHOS_IOS: AparelhoIOS[] = [
-  { l: 440, a: 956, dpr: 3, modelos: "16 Pro Max" },
+  // --- iPhone ---
+  { l: 440, a: 956, dpr: 3, modelos: "17 Pro Max · 16 Pro Max" },
   { l: 430, a: 932, dpr: 3, modelos: "15 Pro Max · 15 Plus · 14 Pro Max" },
   { l: 428, a: 926, dpr: 3, modelos: "14 Plus · 13 Pro Max · 12 Pro Max" },
-  { l: 402, a: 874, dpr: 3, modelos: "16 Pro" },
+  { l: 420, a: 912, dpr: 3, modelos: "Air" },
+  { l: 402, a: 874, dpr: 3, modelos: "17 · 17 Pro · 16 Pro" },
   { l: 393, a: 852, dpr: 3, modelos: "16 · 15 Pro · 15 · 14 Pro" },
-  { l: 390, a: 844, dpr: 3, modelos: "14 · 13 · 13 Pro · 12 · 12 Pro" },
+  { l: 390, a: 844, dpr: 3, modelos: "16e · 14 · 13 · 13 Pro · 12 · 12 Pro" },
   { l: 375, a: 812, dpr: 3, modelos: "13 mini · 12 mini · 11 Pro · XS · X" },
   { l: 414, a: 896, dpr: 3, modelos: "11 Pro Max · XS Max" },
   { l: 414, a: 896, dpr: 2, modelos: "11 · XR" },
   { l: 375, a: 667, dpr: 2, modelos: "SE 2/3 · 8 · 7 · 6s" },
+
+  /**
+   * --- iPad ---
+   * O manifesto pede `orientation: portrait`, mas o iOS ignora esse campo:
+   * num iPad o app abre na orientacao em que o aparelho esta'. Sem estas
+   * entradas, todo iPad caia no caso "nenhuma media query bate" — que e'
+   * exatamente o que produz a tela preta na abertura, porque o iOS nao
+   * escolhe a imagem mais proxima nem redimensiona: ou casa exato, ou nada.
+   */
+  { l: 1032, a: 1376, dpr: 2, modelos: "iPad Pro 13\" (M4)" },
+  { l: 1024, a: 1366, dpr: 2, modelos: "iPad Pro 12.9\"" },
+  { l: 834, a: 1210, dpr: 2, modelos: "iPad Pro 11\" (M4)" },
+  { l: 834, a: 1194, dpr: 2, modelos: "iPad Pro 11\"" },
+  { l: 820, a: 1180, dpr: 2, modelos: "iPad Air 11\" · iPad 10/11" },
+  { l: 834, a: 1112, dpr: 2, modelos: "iPad Air 10.5\" · iPad Pro 10.5\"" },
+  { l: 810, a: 1080, dpr: 2, modelos: "iPad 9 · iPad 8 · iPad 7" },
+  { l: 744, a: 1133, dpr: 2, modelos: "iPad mini 6/7" },
+  { l: 768, a: 1024, dpr: 2, modelos: "iPad mini 5 · iPad Air 2" },
 ];
 
 /** Nome do arquivo gerado para um aparelho, em `public/icons/splash/`. */
@@ -50,6 +70,11 @@ export function arquivoSplash(ap: AparelhoIOS, escuro: boolean): string {
  * A media query do <link>. O `prefers-color-scheme` entra junto para o
  * aparelho no tema escuro nao abrir num flash branco — que e' exatamente o
  * problema que a tela de abertura existe para resolver.
+ *
+ * `orientation` NAO entra. Com ela, girar o aparelho antes de abrir o app
+ * derrubava a unica media query que casava e o iOS voltava ao retangulo vazio.
+ * Sem ela, a imagem retrato serve as duas orientacoes: como o desenho e' a
+ * marca centrada num fundo chapado, esticar nao produz artefato visivel.
  */
 export function mediaSplash(ap: AparelhoIOS, escuro: boolean): string {
   return [
@@ -57,6 +82,5 @@ export function mediaSplash(ap: AparelhoIOS, escuro: boolean): string {
     `(device-width: ${ap.l}px)`,
     `(device-height: ${ap.a}px)`,
     `(-webkit-device-pixel-ratio: ${ap.dpr})`,
-    "(orientation: portrait)",
   ].join(" and ");
 }

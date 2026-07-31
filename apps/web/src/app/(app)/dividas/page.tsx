@@ -2,10 +2,10 @@ import { and, asc, db, debtInstallments, debts, desc, eq, ne } from "@finara/db"
 import { TrendDownIcon } from "@phosphor-icons/react/dist/ssr";
 import type { Metadata } from "next";
 import {
-  AcoesDivida,
   BotaoDesfazerParcela,
   BotaoPagarParcela,
   FormDivida,
+  LinhaDivida,
 } from "@/components/dividas/painel-dividas";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -116,12 +116,30 @@ export default async function DividasPage() {
             const atrasada = proxima ? proxima.dueDate < hoje : false;
 
             return (
-              <li
+              <LinhaDivida
                 key={d.id}
+                dataPadrao={hoje}
+                temParceiro={membros.length > 1}
+                contas={opcoesContas}
+                parcelaAberta={
+                  proxima
+                    ? { id: proxima.id, numero: proxima.number, valor: proxima.amount }
+                    : undefined
+                }
+                divida={{
+                  id: d.id,
+                  nome: d.name,
+                  credor: d.creditor,
+                  parcelasTotal: d.installmentsTotal,
+                  parcelasPagas: d.installmentsPaid,
+                  valorParcela: proxima?.amount ?? 0,
+                  proximoVencimento: proxima?.dueDate ?? hoje,
+                  titularidade: d.ownerId === usuario.id ? "meu" : "conjunto",
+                }}
                 className="animate-[fade-up_0.4s_var(--ease-out-quint)_both]"
                 style={{ animationDelay: `${60 + i * 50}ms` }}
               >
-                <Card className="group">
+                <Card>
                   <CardContent className="p-5">
                     <div className="flex items-start gap-3.5">
                       <span
@@ -154,20 +172,6 @@ export default async function DividasPage() {
                         <p className="text-[11px] text-subtle">de {formatMoney(d.totalAmount)}</p>
                       </div>
 
-                      <AcoesDivida
-                        dataPadrao={hoje}
-                        temParceiro={membros.length > 1}
-                        divida={{
-                          id: d.id,
-                          nome: d.name,
-                          credor: d.creditor,
-                          parcelasTotal: d.installmentsTotal,
-                          parcelasPagas: d.installmentsPaid,
-                          valorParcela: proxima?.amount ?? 0,
-                          proximoVencimento: proxima?.dueDate ?? hoje,
-                          titularidade: d.ownerId === usuario.id ? "meu" : "conjunto",
-                        }}
-                      />
                     </div>
 
                     {/* progresso da quitacao */}
@@ -201,6 +205,7 @@ export default async function DividasPage() {
                         </div>
                         <BotaoPagarParcela
                           parcelaId={proxima.id}
+                          numero={proxima.number}
                           valor={proxima.amount}
                           contas={opcoesContas}
                         />
@@ -219,7 +224,7 @@ export default async function DividasPage() {
                     )}
                   </CardContent>
                 </Card>
-              </li>
+              </LinhaDivida>
             );
           })}
         </ul>

@@ -227,6 +227,13 @@
   }
 }
 
+/* Giro do indicador de "puxar para atualizar", depois que o gesto dispara. */
+@keyframes girar {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 /* ============================================================================
    LOADING DA MARCA
 
@@ -342,6 +349,18 @@
     color-scheme: light;
     /* Impede o iOS de aumentar a fonte ao girar o aparelho. */
     -webkit-text-size-adjust: 100%;
+
+    /* A cor tambem no <html>, e nao so' no <body>: e' este o retangulo que o
+       navegador pinta ANTES de existir qualquer conteudo. Sem isto o primeiro
+       quadro da abertura e' o padrao do sistema — branco no tema claro, PRETO
+       no escuro — e e' exatamente essa a "tela preta" que aparecia entre tocar
+       no icone e o app desenhar. */
+    background-color: var(--canvas);
+
+    /* Nenhum quique nas pontas da rolagem. No navegador o quique e' esperado;
+       num app instalado ele denuncia que aquilo e' uma pagina web, e ainda
+       arrasta a barra inferior junto. */
+    overscroll-behavior: none;
   }
 
   html.dark {
@@ -354,7 +373,13 @@
     font-family: var(--font-sans);
     /* Corta o realce azul de toque no Android. */
     -webkit-tap-highlight-color: transparent;
-    overscroll-behavior-y: none;
+    overscroll-behavior: none;
+
+    /* Mata o atraso de ~300ms que o navegador guarda esperando um possivel
+       toque-duplo. E' a diferenca mais barata entre "responde" e "demora um
+       tiquinho" — e a mais perceptivel. Quem precisa de outro comportamento
+       (as linhas que arrastam) sobrescreve com `touch-pan-y`. */
+    touch-action: manipulation;
   }
 
   /* Foco visivel so' no teclado — mouse nao precisa de anel. */
@@ -406,6 +431,137 @@
       transition-duration: 0.01ms !important;
       scroll-behavior: auto !important;
     }
+  }
+}
+
+/* ============================================================================
+   TROCA DE TELA
+
+   Sem isto, navegar e' um corte seco: a tela antiga some, a nova aparece, e
+   entre as duas passa um quadro de nada — o que faz trocar de aba parecer
+   recarregar a pagina.
+
+   A assimetria e' de proposito, e e' o que faz a coisa ler como movimento e
+   nao como piscada: a saida e' curta (140ms) porque conteudo que esta' indo
+   embora nao deve disputar atencao, e a entrada e' mais longa (220ms) e
+   comeca DEPOIS que a saida termina, dando ao olho o tempo de registrar o que
+   chegou. O deslocamento e' de 8px: o suficiente para existir direcao, longe
+   do bastante de virar um objeto atravessando a tela.
+
+   Os nomes (`tela-entra`, `tela-sai`) vem das props do `<ViewTransition>` em
+   `app-shell.tsx`. O ponto e a classe: o navegador aplica esses nomes como
+   classe nos pseudo-elementos da transicao.
+   ========================================================================= */
+
+::view-transition-old(.tela-sai) {
+  animation: 140ms var(--ease-out-quint) both tela-fade reverse;
+}
+
+::view-transition-new(.tela-entra) {
+  animation:
+    220ms var(--ease-out-quint) 140ms both tela-fade,
+    320ms var(--ease-out-quint) both tela-sobe;
+}
+
+@keyframes tela-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes tela-sobe {
+  from {
+    transform: translateY(8px);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+/* O cabecalho e a barra inferior tem nome proprio e por isso saem da
+   transicao do conteudo. Sem `animation: none` o navegador ainda faria um
+   crossfade entre as duas versoes deles, o que produz um piscar sutil em
+   barra que nao mudou nada. */
+::view-transition-group(cabecalho-app),
+::view-transition-group(barra-app) {
+  animation: none;
+}
+
+::view-transition-old(cabecalho-app),
+::view-transition-old(barra-app) {
+  /* Sem isto os dois retratos (o velho e o novo) aparecem sobrepostos por um
+     quadro, e a barra "engorda". */
+  display: none;
+}
+
+::view-transition-new(cabecalho-app),
+::view-transition-new(barra-app) {
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Deslizamento e' o gatilho mais comum de desconforto vestibular. Sem
+     duracao, o navegador troca na hora — que e' o comportamento padrao dele. */
+  ::view-transition-old(*),
+  ::view-transition-new(*),
+  ::view-transition-group(*) {
+    animation-duration: 0s !important;
+    animation-delay: 0s !important;
+  }
+}
+
+/* ============================================================================
+   MODO APP INSTALADO
+
+   Vale so' quando o Finara abriu pelo icone da tela inicial, sem barra de
+   endereco. No navegador as convencoes de pagina continuam de pe' — selecionar
+   texto, menu do toque longo, arrastar imagem. Dentro do app instalado sao
+   justamente essas convencoes que denunciam que aquilo nao e' nativo: segurar
+   o dedo num saldo e ver "Copiar / Pesquisar na web" quebra a ilusao na hora.
+
+   Fora de @layer para vencer os utilitarios do Tailwind sem precisar de
+   `!important` espalhado.
+   ========================================================================= */
+
+@media (display-mode: standalone), (display-mode: fullscreen), (display-mode: minimal-ui) {
+  body {
+    -webkit-user-select: none;
+    user-select: none;
+    /* Sem isto, o toque longo abre a lupa e o menu de copiar do sistema. */
+    -webkit-touch-callout: none;
+  }
+
+  /* Campo de texto continua selecionavel: sem isto nao da' pra posicionar o
+     cursor para corrigir um valor digitado errado. */
+  input,
+  textarea,
+  [contenteditable] {
+    -webkit-user-select: text;
+    user-select: text;
+  }
+
+  /* A unica coisa que alguem realmente quer copiar daqui e' um numero — e todo
+     valor de dinheiro ja' passa por `.tabular`. */
+  .tabular {
+    -webkit-user-select: text;
+    user-select: text;
+  }
+
+  /* Arrastar imagem e link e' gesto de desktop; no app vira fantasma seguindo
+     o dedo por cima da interface. */
+  img,
+  a,
+  svg {
+    -webkit-user-drag: none;
+  }
+
+  /* Barra de rolagem permanente e' coisa de janela, nao de app. */
+  ::-webkit-scrollbar {
+    width: 0;
+    height: 0;
   }
 }
 

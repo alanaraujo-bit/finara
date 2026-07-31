@@ -9,7 +9,13 @@ import {
   TrashIcon,
 } from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
-import { useActionState, useState, useTransition } from "react";
+import {
+  useActionState,
+  useState,
+  useTransition,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
 import {
   ajustarSaldo,
   arquivarConta,
@@ -18,13 +24,15 @@ import {
   excluirConta,
   type EstadoConta,
 } from "@/app/(app)/contas/actions";
-import { AcoesLinha } from "@/components/ui/acoes-linha";
+import type { Acao } from "@/components/ui/acoes-linha";
 import { Button } from "@/components/ui/button";
 import { Carregando } from "@/components/ui/carregando";
 import { FieldError, Input, Label } from "@/components/ui/input";
+import { LinhaDeslizante } from "@/components/ui/linha-deslizante";
 import { Modal } from "@/components/ui/modal";
 import { SegmentedField, Select } from "@/components/ui/select";
 import { formatMoney, formatMoneyBare, parseMoney } from "@/lib/money";
+import { cn } from "@/lib/utils";
 
 const TIPOS = [
   { valor: "checking", rotulo: "Conta corrente" },
@@ -242,24 +250,74 @@ function Campos({
 }
 
 /**
- * Ações da conta: editar, ajustar saldo, arquivar/restaurar e excluir.
+ * A LINHA de uma conta — o cartão inteiro responde ao gesto.
  *
- * Excluir só aparece quando nenhum lançamento aponta para a conta. As FKs são
- * `SET NULL`: apagar uma conta com movimento não daria erro, só soltaria os
- * lançamentos em silêncio e o extrato passaria a mostrar gastos sem origem.
+ * Ajustar saldo sai da fileira e vira o arrasto para a direita: é a ação que
+ * se repete (conferir com o extrato do banco toda semana), e a única aqui que
+ * não é manutenção de cadastro. As de manutenção ficam na esquerda.
+ *
+ * Excluir só é oferecido quando nenhum lançamento aponta para a conta. As FKs
+ * são `SET NULL`: apagar uma conta com movimento não daria erro, só soltaria
+ * os lançamentos em silêncio e o extrato passaria a mostrar gastos sem origem.
  */
-export function AcoesConta({
+export function LinhaConta({
   conta,
   temParceiro,
+  children,
+  className,
+  style,
 }: {
   conta: ContaEditavel;
   temParceiro: boolean;
+  children: ReactNode;
+  className?: string;
+  style?: CSSProperties;
 }) {
   const [editando, setEditando] = useState(false);
   const [ajustando, setAjustando] = useState(false);
 
   return (
-    <>
+    <LinhaDeslizante
+      as="li"
+      className={cn("rounded-2xl", className)}
+      style={style}
+      acaoPrincipal={{
+        rotulo: "Ajustar saldo",
+        icone: <ScalesIcon size={15} weight="bold" />,
+        tom: "primary",
+        aoClicar: () => setAjustando(true),
+      }}
+      acoes={[
+        {
+          rotulo: "Editar conta",
+          icone: <PencilSimpleIcon size={15} weight="bold" />,
+          aoClicar: () => setEditando(true),
+        },
+        conta.arquivada
+          ? {
+              rotulo: "Restaurar conta",
+              icone: <ArrowCounterClockwiseIcon size={15} weight="bold" />,
+              executar: () => arquivarConta(conta.id, false),
+            }
+          : {
+              rotulo: "Arquivar conta",
+              icone: <ArchiveIcon size={15} weight="bold" />,
+              confirmar: "Arquivar?",
+              executar: () => arquivarConta(conta.id, true),
+            },
+        ...(conta.temLancamentos
+          ? []
+          : [
+              {
+                rotulo: "Excluir conta",
+                icone: <TrashIcon size={15} weight="bold" />,
+                perigo: true,
+                confirmar: "Excluir?",
+                executar: () => excluirConta(conta.id),
+              } satisfies Acao,
+            ]),
+      ]}
+    >
       <FormConta
         temParceiro={temParceiro}
         conta={conta}
@@ -267,45 +325,8 @@ export function AcoesConta({
         aoFechar={() => setEditando(false)}
       />
       <AjusteDeSaldo conta={conta} aberto={ajustando} aoFechar={() => setAjustando(false)} />
-
-      <AcoesLinha
-        acoes={[
-          {
-            rotulo: "Editar conta",
-            icone: <PencilSimpleIcon size={15} weight="bold" />,
-            aoClicar: () => setEditando(true),
-          },
-          {
-            rotulo: "Ajustar saldo",
-            icone: <ScalesIcon size={15} weight="bold" />,
-            aoClicar: () => setAjustando(true),
-          },
-          conta.arquivada
-            ? {
-                rotulo: "Restaurar conta",
-                icone: <ArrowCounterClockwiseIcon size={15} weight="bold" />,
-                executar: () => arquivarConta(conta.id, false),
-              }
-            : {
-                rotulo: "Arquivar conta",
-                icone: <ArchiveIcon size={15} weight="bold" />,
-                confirmar: "Arquivar?",
-                executar: () => arquivarConta(conta.id, true),
-              },
-          ...(conta.temLancamentos
-            ? []
-            : [
-                {
-                  rotulo: "Excluir conta",
-                  icone: <TrashIcon size={15} weight="bold" />,
-                  perigo: true,
-                  confirmar: "Excluir?",
-                  executar: () => excluirConta(conta.id),
-                },
-              ]),
-        ]}
-      />
-    </>
+      {children}
+    </LinhaDeslizante>
   );
 }
 

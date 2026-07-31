@@ -1,7 +1,7 @@
 import { and, asc, categories, db, eq, ne, subscriptions } from "@finara/db";
 import { RepeatIcon } from "@phosphor-icons/react/dist/ssr";
 import type { Metadata } from "next";
-import { AcoesAssinatura, FormAssinatura } from "@/components/assinaturas/painel-assinaturas";
+import { FormAssinatura, LinhaAssinatura } from "@/components/assinaturas/painel-assinaturas";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -105,8 +105,22 @@ export default async function AssinaturasPage() {
             const mensal = custoMensalEquivalente(s.valor, s.ciclo as Ciclo);
 
             return (
-              <li
+              <LinhaAssinatura
                 key={s.id}
+                id={s.id}
+                ativa={ativa}
+                categorias={categoriasTodas.map((c) => ({ id: c.id, nome: c.nome }))}
+                dataPadrao={hoje}
+                temParceiro={membros.length > 1}
+                assinatura={{
+                  id: s.id,
+                  nome: s.nome,
+                  valor: s.valor,
+                  ciclo: s.ciclo,
+                  inicio: s.inicio,
+                  categoriaId: s.categoriaId,
+                  titularidade: s.ownerId === usuario.id ? "meu" : "conjunto",
+                }}
                 className="animate-[fade-up_0.4s_var(--ease-out-quint)_both]"
                 style={{ animationDelay: `${60 + i * 40}ms` }}
               >
@@ -152,25 +166,9 @@ export default async function AssinaturasPage() {
                       )}
                     </div>
 
-                    <AcoesAssinatura
-                      id={s.id}
-                      ativa={ativa}
-                      categorias={categoriasTodas.map((c) => ({ id: c.id, nome: c.nome }))}
-                      dataPadrao={hoje}
-                      temParceiro={membros.length > 1}
-                      assinatura={{
-                        id: s.id,
-                        nome: s.nome,
-                        valor: s.valor,
-                        ciclo: s.ciclo,
-                        inicio: s.inicio,
-                        categoriaId: s.categoriaId,
-                        titularidade: s.ownerId === usuario.id ? "meu" : "conjunto",
-                      }}
-                    />
                   </CardContent>
                 </Card>
-              </li>
+              </LinhaAssinatura>
             );
           })}
         </ul>

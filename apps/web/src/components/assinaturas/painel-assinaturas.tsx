@@ -9,7 +9,7 @@ import {
   XIcon,
 } from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
-import { useActionState, useState, useTransition } from "react";
+import { useActionState, useState, type CSSProperties, type ReactNode } from "react";
 import {
   alternarAssinatura,
   cancelarAssinatura,
@@ -21,11 +21,12 @@ import {
 import { Button } from "@/components/ui/button";
 import { Carregando } from "@/components/ui/carregando";
 import { FieldError, Input, Label } from "@/components/ui/input";
-import { AcoesLinha } from "@/components/ui/acoes-linha";
+import { LinhaDeslizante } from "@/components/ui/linha-deslizante";
 import { Modal } from "@/components/ui/modal";
 import { formatMoneyBare } from "@/lib/money";
 import { SegmentedField, Select } from "@/components/ui/select";
 import { ROTULO_CICLO } from "@/lib/recorrencia";
+import { cn } from "@/lib/utils";
 
 /** O que a caixa de edicao precisa para abrir preenchida. */
 export type AssinaturaEditavel = {
@@ -258,14 +259,33 @@ function CamposAssinatura({
   );
 }
 
-/** Pausar/retomar e cancelar. Cancelar e' irreversivel, entao confirma. */
-export function AcoesAssinatura({
+/**
+ * A LINHA de uma assinatura — o cartão inteiro, e não só os botões do canto.
+ *
+ * Era `AcoesAssinatura`: quatro ícones enfileirados dentro do cartão, 32px
+ * cada, disputando espaço com o nome do serviço e com o valor. No celular a
+ * fileira empurrava o valor para fora e o alvo de excluir ficava colado no de
+ * pausar.
+ *
+ * Agora a linha inteira é a superfície. Arrastar para a direita pausa ou
+ * retoma — a ação frequente, reversível, que merece o gesto mais fácil.
+ * Arrastar para a esquerda revela as de manutenção. No desktop nada mudou de
+ * lugar: os mesmos ícones aparecem no hover.
+ *
+ * As três da esquerda cabem em 228px e param aí de propósito: quatro
+ * espremeriam o conteúdo contra a borda e a gaveta deixaria de ser legível de
+ * relance.
+ */
+export function LinhaAssinatura({
   id,
   ativa,
   assinatura,
   categorias,
   dataPadrao,
   temParceiro,
+  children,
+  className,
+  style,
 }: {
   id: string;
   ativa: boolean;
@@ -273,38 +293,51 @@ export function AcoesAssinatura({
   categorias: { id: string; nome: string }[];
   dataPadrao: string;
   temParceiro: boolean;
+  children: ReactNode;
+  className?: string;
+  style?: CSSProperties;
 }) {
   const [editando, setEditando] = useState(false);
-  const router = useRouter();
-  const [pendente, iniciar] = useTransition();
-  const [confirmando, setConfirmando] = useState(false);
-
-  if (confirmando) {
-    return (
-      <div className="flex items-center gap-1.5">
-        <span className="text-[11.5px] text-muted">Cancelar de vez?</span>
-        <Button
-          variant="danger"
-          size="sm"
-          disabled={pendente}
-          onClick={() =>
-            iniciar(async () => {
-              await cancelarAssinatura(id);
-              router.refresh();
-            })
-          }
-        >
-          Sim
-        </Button>
-        <Button variant="ghost" size="sm" onClick={() => setConfirmando(false)}>
-          Não
-        </Button>
-      </div>
-    );
-  }
 
   return (
-    <div className="flex items-center gap-1">
+    <LinhaDeslizante
+      as="li"
+      className={cn("rounded-2xl", className)}
+      style={style}
+      acaoPrincipal={{
+        rotulo: ativa ? "Pausar assinatura" : "Retomar assinatura",
+        icone: ativa ? <PauseIcon size={15} weight="fill" /> : <PlayIcon size={15} weight="fill" />,
+        tom: "primary",
+        executar: async () => {
+          await alternarAssinatura(id);
+        },
+      }}
+      acoes={[
+        {
+          rotulo: "Editar assinatura",
+          icone: <PencilSimpleIcon size={15} weight="bold" />,
+          aoClicar: () => setEditando(true),
+        },
+        // Cancelar guarda o registro de que já se assinou aquilo; excluir é
+        // para quando o cadastro foi engano. Assinatura não gera lançamento
+        // por conta própria, então excluir não deixa histórico órfão.
+        {
+          rotulo: "Cancelar assinatura",
+          icone: <XIcon size={15} weight="bold" />,
+          confirmar: "Cancelar de vez?",
+          executar: async () => {
+            await cancelarAssinatura(id);
+          },
+        },
+        {
+          rotulo: "Excluir assinatura",
+          icone: <TrashIcon size={15} weight="bold" />,
+          perigo: true,
+          confirmar: "Excluir?",
+          executar: () => excluirAssinatura(id),
+        },
+      ]}
+    >
       <FormAssinatura
         categorias={categorias}
         dataPadrao={dataPadrao}
@@ -313,55 +346,7 @@ export function AcoesAssinatura({
         aberto={editando}
         aoFechar={() => setEditando(false)}
       />
-      {/* Editar e excluir de vez. Cancelar (o X ao lado) continua existindo
-          para quem quer manter o registro de que ja' assinou; excluir e' para
-          quando o cadastro foi engano — assinatura nao gera lancamento por
-          conta propria, entao nao ha' historico a preservar. */}
-      <AcoesLinha
-        className="!opacity-100"
-        acoes={[
-          {
-            rotulo: "Editar assinatura",
-            icone: <PencilSimpleIcon size={15} weight="bold" />,
-            aoClicar: () => setEditando(true),
-          },
-          {
-            rotulo: "Excluir assinatura",
-            icone: <TrashIcon size={15} weight="bold" />,
-            perigo: true,
-            confirmar: "Excluir?",
-            executar: () => excluirAssinatura(id),
-          },
-        ]}
-      />
-      <button
-        type="button"
-        disabled={pendente}
-        aria-label={ativa ? "Pausar assinatura" : "Retomar assinatura"}
-        onClick={() =>
-          iniciar(async () => {
-            await alternarAssinatura(id);
-            router.refresh();
-          })
-        }
-        className="grid size-8 place-items-center rounded-lg text-subtle transition-colors hover:bg-surface-2 hover:text-text disabled:opacity-50"
-      >
-        {pendente ? (
-          <Carregando size={15} rotulo={null} />
-        ) : ativa ? (
-          <PauseIcon size={15} weight="fill" />
-        ) : (
-          <PlayIcon size={15} weight="fill" />
-        )}
-      </button>
-      <button
-        type="button"
-        aria-label="Cancelar assinatura"
-        onClick={() => setConfirmando(true)}
-        className="grid size-8 place-items-center rounded-lg text-subtle transition-colors hover:bg-surface-2 hover:text-expense"
-      >
-        <XIcon size={15} weight="bold" />
-      </button>
-    </div>
+      {children}
+    </LinhaDeslizante>
   );
 }

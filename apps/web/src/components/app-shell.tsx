@@ -8,11 +8,13 @@ import {
 } from "@phosphor-icons/react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState, type ReactNode } from "react";
+import { useState, ViewTransition, type ReactNode } from "react";
 import { Logo, Wordmark } from "@/components/logo";
+import { PuxarParaAtualizar } from "@/components/puxar-para-atualizar";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { signOut } from "@/lib/auth-client";
 import { mobileNavItems, navigation } from "@/lib/navigation";
+import { TATO, vibrar } from "@/lib/tato";
 import { cn } from "@/lib/utils";
 
 export type UsuarioShell = { nome: string; email: string };
@@ -195,7 +197,13 @@ function BotaoMostrarSidebar({ aoClicar }: { aoClicar: () => void }) {
  */
 function MobileHeader() {
   return (
-    <header className="pt-safe sticky top-0 z-30 flex h-14 items-center justify-between border-b border-border bg-surface px-4 lg:hidden">
+    <header
+      // `view-transition-name` tira o cabeçalho da animação de troca de tela:
+      // ele é a âncora espacial. Se ele deslizar junto, o movimento deixa de
+      // ler como "o conteúdo mudou" e passa a ler como "a tela toda pulou".
+      style={{ viewTransitionName: "cabecalho-app" }}
+      className="pt-safe sticky top-0 z-30 flex h-14 items-center justify-between border-b border-border bg-surface px-4 lg:hidden"
+    >
       <div className="flex items-center gap-2">
         <Logo size={26} />
         <Wordmark className="text-base" />
@@ -214,7 +222,11 @@ function MobileNav() {
   const pathname = usePathname();
 
   return (
-    <nav className="pb-safe fixed inset-x-0 bottom-0 z-30 border-t border-border bg-surface lg:hidden">
+    <nav
+      // Fora da animação de troca de tela, pela mesma razão do cabeçalho.
+      style={{ viewTransitionName: "barra-app" }}
+      className="pb-safe fixed inset-x-0 bottom-0 z-30 border-t border-border bg-surface lg:hidden"
+    >
       <ul className="flex items-stretch justify-around px-1 pt-1">
         {mobileNavItems.slice(0, 2).map((item) => (
           <MobileNavItem key={item.href} item={item} active={isActive(pathname, item.href)} />
@@ -224,6 +236,7 @@ function MobileNav() {
           <Link
             href="/lancamentos/novo"
             aria-label="Novo lançamento"
+            onClick={() => vibrar(TATO.leve)}
             className={cn(
               "grid size-12 -translate-y-3 place-items-center rounded-2xl bg-primary text-primary-fg",
               "shadow-[var(--shadow-glow)] transition-transform duration-200 ease-[var(--ease-spring)]",
@@ -257,12 +270,33 @@ function MobileNavItem({
     <li className="flex-1">
       <Link
         href={item.href}
+        // `prefetch` explícito: sem ele o Next só busca até o `loading.tsx`
+        // destas rotas dinâmicas, e o toque ainda esperaria o servidor. Com
+        // ele, a tela já está na memória quando o dedo encosta.
+        prefetch
+        // O pulso no toque é o que dá à barra a resposta de app nativo. Vem
+        // antes da navegação de propósito: confirma o toque na hora, sem
+        // depender de a tela nova estar pronta.
+        onClick={() => vibrar(TATO.leve)}
         className={cn(
-          "flex min-h-[52px] flex-col items-center justify-center gap-1 rounded-xl px-1 py-1.5",
+          "relative flex min-h-[52px] flex-col items-center justify-center gap-1 rounded-xl px-1 py-1.5",
           "transition-colors duration-200",
+          // O recuo no toque devolve a sensação de tecla física.
+          "transition-transform active:scale-[0.92]",
           active ? "text-primary" : "text-subtle",
         )}
       >
+        {/* Marcador do item ativo. Cresce a partir do centro com a curva de
+            mola — o mesmo vocabulário do marcador da sidebar, para as duas
+            navegações não parecerem de apps diferentes. */}
+        <span
+          aria-hidden
+          className={cn(
+            "absolute top-0 h-[3px] w-7 rounded-b-full bg-primary",
+            "origin-center transition-transform duration-300 ease-[var(--ease-spring)]",
+            active ? "scale-x-100" : "scale-x-0",
+          )}
+        />
         <item.icon size={21} weight={active ? "duotone" : "regular"} />
         <span className="text-[10px] font-medium leading-none">{item.label}</span>
       </Link>
@@ -293,6 +327,7 @@ export function AppShell({
 
   return (
     <div className="min-h-dvh">
+      <PuxarParaAtualizar />
       <Sidebar usuario={usuario} workspace={workspace} recolhida={recolhida} aoAlternar={alternar} />
       {recolhida && <BotaoMostrarSidebar aoClicar={alternar} />}
       <MobileHeader />
@@ -304,7 +339,22 @@ export function AppShell({
           recolhida ? "lg:pl-0" : "lg:pl-[248px]",
         )}
       >
-        {children}
+        {/*
+          Trocar de tela era um corte seco: a antiga sumia, a nova aparecia, e
+          entre as duas passava um quadro de nada. Num app de aba, esse quadro
+          e' o que faz a navegacao parecer recarregamento de pagina.
+
+          Aqui a saida e' rapida (a antiga nao deve competir por atencao) e a
+          entrada e' mais lenta e comeca depois — o tempo de a pessoa registrar
+          o que chegou. As regras `::view-transition-*` estao em `globals.css`.
+
+          `default="none"` impede esta caixa de animar em transicoes que nao
+          sao de rota: sem isso, cada `router.refresh()` de um formulario
+          salvo faria a tela inteira piscar.
+        */}
+        <ViewTransition enter="tela-entra" exit="tela-sai" default="none">
+          {children}
+        </ViewTransition>
       </main>
       <MobileNav />
     </div>

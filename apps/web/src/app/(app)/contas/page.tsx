@@ -1,7 +1,7 @@
 import { and, db, eq, sql, transactions } from "@finara/db";
 import { BankIcon, WalletIcon } from "@phosphor-icons/react/dist/ssr";
 import type { Metadata } from "next";
-import { AcoesConta, FormConta } from "@/components/contas/form-conta";
+import { FormConta, LinhaConta } from "@/components/contas/form-conta";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -87,12 +87,23 @@ export default async function ContasPage() {
       ) : (
         <ul className="mt-6 grid gap-3 sm:grid-cols-2">
           {contas.map((c, i) => (
-            <li
+            <LinhaConta
               key={c.id}
+              temParceiro={membros.length > 1}
+              conta={{
+                id: c.id,
+                nome: c.name,
+                tipo: c.type,
+                instituicao: c.institution,
+                titularidade: c.ownerId === null ? "conjunta" : "minha",
+                saldo: c.currentBalance,
+                arquivada: c.isArchived,
+                temLancamentos: comLancamento.has(c.id),
+              }}
               className="animate-[fade-up_0.4s_var(--ease-out-quint)_both]"
               style={{ animationDelay: `${60 + i * 40}ms` }}
             >
-              <Card className="group h-full transition-shadow hover:shadow-sm">
+              <Card className="h-full transition-shadow hover:shadow-sm">
                 <CardContent className="flex items-start gap-3.5 p-5">
                   <span
                     className="grid size-10 shrink-0 place-items-center rounded-xl"
@@ -108,31 +119,16 @@ export default async function ContasPage() {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-start justify-between gap-2">
                       <p className="truncate text-[14px] font-semibold text-text">{c.name}</p>
-                      <div className="flex shrink-0 items-center gap-1.5">
-                        {/* ownerId nulo = conta do casal. */}
-                        {membros.length > 1 && (
-                          <Badge tone={c.ownerId === null ? "primary" : "neutral"}>
-                            {c.ownerId === null
-                              ? "Conjunta"
-                              : c.ownerId === usuario.id
-                                ? "Minha"
-                                : "Do parceiro"}
-                          </Badge>
-                        )}
-                        <AcoesConta
-                          temParceiro={membros.length > 1}
-                          conta={{
-                            id: c.id,
-                            nome: c.name,
-                            tipo: c.type,
-                            instituicao: c.institution,
-                            titularidade: c.ownerId === null ? "conjunta" : "minha",
-                            saldo: c.currentBalance,
-                            arquivada: c.isArchived,
-                            temLancamentos: comLancamento.has(c.id),
-                          }}
-                        />
-                      </div>
+                      {/* ownerId nulo = conta do casal. */}
+                      {membros.length > 1 && (
+                        <Badge tone={c.ownerId === null ? "primary" : "neutral"}>
+                          {c.ownerId === null
+                            ? "Conjunta"
+                            : c.ownerId === usuario.id
+                              ? "Minha"
+                              : "Do parceiro"}
+                        </Badge>
+                      )}
                     </div>
 
                     <p className="mt-0.5 text-[11.5px] text-subtle">
@@ -151,7 +147,7 @@ export default async function ContasPage() {
                   </div>
                 </CardContent>
               </Card>
-            </li>
+            </LinhaConta>
           ))}
         </ul>
       )}

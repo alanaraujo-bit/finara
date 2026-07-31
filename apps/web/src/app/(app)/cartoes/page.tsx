@@ -2,9 +2,9 @@ import { CreditCardIcon } from "@phosphor-icons/react/dist/ssr";
 import type { Metadata } from "next";
 import { BotaoPagar } from "@/components/cartoes/botao-pagar";
 import {
-  AcoesCartao,
   BotaoDesfazerFatura,
   FormCartao,
+  LinhaCartao,
 } from "@/components/cartoes/form-cartao";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -74,12 +74,27 @@ export default async function CartoesPage() {
             const paga = c.faturaStatus === "paid";
 
             return (
-              <li
+              <LinhaCartao
                 key={c.id}
+                contas={opcoesContas}
+                temParceiro={membros.length > 1}
+                cartao={{
+                  id: c.id,
+                  nome: c.nome,
+                  bandeira: c.bandeira,
+                  final: c.finalCartao,
+                  limite: c.limite,
+                  diaFechamento: c.diaFechamento,
+                  diaVencimento: c.diaVencimento,
+                  contaPagamentoId: c.contaPagamentoId,
+                  titularidade: c.ownerId === usuario.id ? "meu" : "conjunto",
+                  // Uma fatura com valor ja' e' compra no historico.
+                  temCompras: c.faturaTotal > 0 || c.faturaId !== null,
+                }}
                 className="animate-[fade-up_0.4s_var(--ease-out-quint)_both]"
                 style={{ animationDelay: `${60 + i * 50}ms` }}
               >
-                <Card className="group overflow-hidden">
+                <Card className="overflow-hidden">
                   <CardContent className="p-5">
                     <div className="flex items-start gap-3.5">
                       <span
@@ -114,23 +129,6 @@ export default async function CartoesPage() {
                         </p>
                       </div>
 
-                      <AcoesCartao
-                        contas={opcoesContas}
-                        temParceiro={membros.length > 1}
-                        cartao={{
-                          id: c.id,
-                          nome: c.nome,
-                          bandeira: c.bandeira,
-                          final: c.finalCartao,
-                          limite: c.limite,
-                          diaFechamento: c.diaFechamento,
-                          diaVencimento: c.diaVencimento,
-                          contaPagamentoId: c.contaPagamentoId,
-                          titularidade: c.ownerId === usuario.id ? "meu" : "conjunto",
-                          // Uma fatura com valor ja' e' compra no historico.
-                          temCompras: c.faturaTotal > 0 || c.faturaId !== null,
-                        }}
-                      />
                     </div>
 
                     {/* ---------- fatura ---------- */}
@@ -198,7 +196,7 @@ export default async function CartoesPage() {
                     </div>
                   </CardContent>
                 </Card>
-              </li>
+              </LinhaCartao>
             );
           })}
         </ul>

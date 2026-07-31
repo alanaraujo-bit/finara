@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { AppNativo } from "@/components/app-nativo";
 import { ServiceWorkerRegistration } from "@/components/service-worker";
 import { ThemeProvider } from "@/components/theme-provider";
 import { APARELHOS_IOS, arquivoSplash, mediaSplash } from "@/lib/splash-ios";
@@ -88,8 +89,29 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  // Bloquear zoom prejudica acessibilidade; deixamos livre de proposito.
+  /**
+   * Zoom desligado. Nao e' escolha de leveza: num app instalado, o pinch e o
+   * toque-duplo do navegador nao "aumentam a fonte" — eles deslocam o layout
+   * inteiro, e ai a barra inferior sai da tela, a folha de baixo abre torta e
+   * nao existe gesto de voltar ao 1:1, porque em standalone nao ha' barra de
+   * endereco. Era o que estava acontecendo. Todo app nativo trava a escala
+   * pelo mesmo motivo.
+   *
+   * O que se perde de acessibilidade e' devolvido por outro caminho: o
+   * `-webkit-text-size-adjust: 100%` continua respeitando o tamanho de fonte
+   * do sistema, e nenhuma area de rolagem depende de zoom pra ser alcancada.
+   */
+  maximumScale: 1,
+  userScalable: false,
   viewportFit: "cover",
+  /**
+   * Antes do CSS chegar, o navegador ja' precisa pintar alguma coisa — e sem
+   * esta declaracao ele pinta branco, mesmo com o sistema no escuro. Era o
+   * flash claro que abria o app antes do tema certo aparecer. Com
+   * "light dark", esse primeiro retangulo ja' sai na cor do sistema, e os
+   * controles nativos (calendario, lista suspensa) tambem seguem o tema.
+   */
+  colorScheme: "light dark",
   /**
    * Com o padrao (`resizes-visual`) o teclado do celular sobe POR CIMA da
    * pagina: numa folha ancorada embaixo, o botao de salvar fica escondido
@@ -117,6 +139,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
           {/* O shell (sidebar/barra inferior) vive no grupo (app); as telas de
               login ficam em (auth) e nao devem herdar navegacao nenhuma. */}
           {children}
+          <AppNativo />
           <ServiceWorkerRegistration />
         </ThemeProvider>
       </body>

@@ -9,7 +9,13 @@ import {
   TrashIcon,
 } from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
-import { useActionState, useState, useTransition } from "react";
+import {
+  useActionState,
+  useState,
+  useTransition,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
 import {
   arquivarDivida,
   criarDivida,
@@ -19,15 +25,17 @@ import {
   pagarParcela,
   type EstadoDivida,
 } from "@/app/(app)/dividas/actions";
-import { AcoesLinha } from "@/components/ui/acoes-linha";
-
+import { AcoesLinha, type Acao } from "@/components/ui/acoes-linha";
 import { Button } from "@/components/ui/button";
 import { Carregando } from "@/components/ui/carregando";
 import { FieldError, Input, Label } from "@/components/ui/input";
+import { LinhaDeslizante } from "@/components/ui/linha-deslizante";
 import { Modal } from "@/components/ui/modal";
 import { SegmentedField, Select } from "@/components/ui/select";
 import { mesmoDiaNoMes, mesPorExtenso } from "@/lib/datas";
 import { formatMoney, formatMoneyBare, parseMoney } from "@/lib/money";
+import { TATO, vibrar } from "@/lib/tato";
+import { cn } from "@/lib/utils";
 
 /** O que o formulario de edicao precisa para abrir preenchido. */
 export type DividaEditavel = {
@@ -379,66 +387,90 @@ function ResumoDivida({ conta }: { conta: ContaDaDivida }) {
   );
 }
 
-export function BotaoPagarParcela({
+/**
+ * A folha de pagar uma parcela.
+ *
+ * Mesma história do recebível: o seletor de conta abria dentro da linha e
+ * reorganizava o cartão da dívida no exato momento de conferir o valor. Como
+ * folha, a pergunta ("de onde sai?") tem espaço, e o valor da parcela aparece
+ * grande antes de confirmar.
+ */
+export function FolhaPagarParcela({
   parcelaId,
+  numero,
   valor,
   contas,
+  aoFechar,
 }: {
   parcelaId: string;
+  numero: number;
   valor: number;
   contas: { id: string; nome: string }[];
+  aoFechar: () => void;
 }) {
   const router = useRouter();
-  const [aberto, setAberto] = useState(false);
   const [contaId, setContaId] = useState("");
   const [pendente, iniciar] = useTransition();
 
-  if (!aberto) {
-    return (
-      <Button variant="outline" size="sm" onClick={() => setAberto(true)}>
-        Pagar
-      </Button>
-    );
-  }
-
   return (
-    <div className="flex flex-wrap items-center gap-1.5">
-      <Select
-        aria-label="Conta de onde sai o pagamento"
-        value={contaId}
-        onChange={(e) => setContaId(e.target.value)}
-        disabled={pendente}
-        className="h-8 w-auto min-w-[150px] text-[12.5px]"
-      >
-        <option value="">Sem conta</option>
-        {contas.map((c) => (
-          <option key={c.id} value={c.id}>
-            {c.nome}
-          </option>
-        ))}
-      </Select>
-      <Button
-        size="sm"
-        disabled={pendente}
-        onClick={() =>
-          iniciar(async () => {
-            await pagarParcela(parcelaId, contaId || undefined);
-            setAberto(false);
-            router.refresh();
-          })
-        }
-      >
-        {pendente ? (
-          <Carregando size={14} rotulo={null} />
-        ) : (
-          <CheckIcon size={14} weight="bold" />
-        )}
-        {formatMoney(valor)}
-      </Button>
-      <Button variant="ghost" size="sm" onClick={() => setAberto(false)}>
-        Cancelar
-      </Button>
-    </div>
+    <Modal
+      aberto
+      aoFechar={aoFechar}
+      titulo={`Pagar a parcela ${numero}`}
+      descricao="Vira um lançamento no extrato e sai do saldo da conta escolhida."
+    >
+      <div className="space-y-4">
+        <div className="rounded-xl border border-border bg-surface-2/60 p-4 text-center">
+          <p className="text-[12px] font-medium uppercase tracking-wide text-subtle">Valor</p>
+          <p className="tabular mt-1 text-[30px] font-semibold leading-none text-text">
+            {formatMoney(valor)}
+          </p>
+        </div>
+
+        <div>
+          <Label htmlFor={`conta-parcela-${parcelaId}`}>De onde sai?</Label>
+          <Select
+            id={`conta-parcela-${parcelaId}`}
+            value={contaId}
+            onChange={(e) => setContaId(e.target.value)}
+            disabled={pendente}
+          >
+            <option value="">Sem conta (não mexer em saldo)</option>
+            {contas.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.nome}
+              </option>
+            ))}
+          </Select>
+        </div>
+
+        <Button
+          size="lg"
+          className="w-full gap-2"
+          disabled={pendente}
+          onClick={() =>
+            iniciar(async () => {
+              await pagarParcela(parcelaId, contaId || undefined);
+              vibrar(TATO.concluido);
+              aoFechar();
+              router.refresh();
+            })
+          }
+        >
+          {pendente ? (
+            <>
+              <Carregando size={17} rotulo={null} />
+              Pagando...
+            </>
+          ) : (
+            <>
+              <CheckIcon size={16} weight="bold" />
+              Confirmar pagamento
+            </>
+          )}
+        </Button>
+      </div>
+    </Modal>
   );
 }
 
@@ -450,20 +482,71 @@ export function BotaoPagarParcela({
  * do que nao oferecer. Nesse caso sobra arquivar, que tira das listas sem
  * apagar os lancamentos que a divida ja' explicou.
  */
-export function AcoesDivida({
+export function LinhaDivida({
   divida,
   dataPadrao,
   temParceiro,
+  parcelaAberta,
+  contas,
+  children,
+  className,
+  style,
 }: {
   divida: DividaEditavel;
   dataPadrao: string;
   temParceiro: boolean;
+  /** A próxima parcela em aberto, quando existe: é ela que o gesto paga. */
+  parcelaAberta?: { id: string; numero: number; valor: number };
+  contas: { id: string; nome: string }[];
+  children: ReactNode;
+  className?: string;
+  style?: CSSProperties;
 }) {
   const [editando, setEditando] = useState(false);
+  const [pagando, setPagando] = useState(false);
   const semHistorico = divida.parcelasPagas === 0;
 
   return (
-    <>
+    <LinhaDeslizante
+      as="li"
+      className={cn("rounded-2xl", className)}
+      style={style}
+      // Pagar a próxima parcela é a ação que se repete todo mês nesta tela —
+      // e é reversível (`desfazerPagamentoParcela` existe). Ganha o gesto.
+      acaoPrincipal={
+        parcelaAberta
+          ? {
+              rotulo: "Pagar parcela",
+              icone: <CheckIcon size={15} weight="bold" />,
+              aoClicar: () => setPagando(true),
+            }
+          : undefined
+      }
+      acoes={[
+        {
+          rotulo: "Editar dívida",
+          icone: <PencilSimpleIcon size={15} weight="bold" />,
+          aoClicar: () => setEditando(true),
+        },
+        {
+          rotulo: "Arquivar dívida",
+          icone: <ArchiveIcon size={15} weight="bold" />,
+          confirmar: "Arquivar?",
+          executar: () => arquivarDivida(divida.id),
+        },
+        ...(semHistorico
+          ? [
+              {
+                rotulo: "Excluir dívida",
+                icone: <TrashIcon size={15} weight="bold" />,
+                perigo: true,
+                confirmar: "Excluir?",
+                executar: () => excluirDivida(divida.id),
+              } satisfies Acao,
+            ]
+          : []),
+      ]}
+    >
       <FormDivida
         dataPadrao={dataPadrao}
         temParceiro={temParceiro}
@@ -471,32 +554,54 @@ export function AcoesDivida({
         aberto={editando}
         aoFechar={() => setEditando(false)}
       />
-      <AcoesLinha
-        acoes={[
-          {
-            rotulo: "Editar dívida",
-            icone: <PencilSimpleIcon size={15} weight="bold" />,
-            aoClicar: () => setEditando(true),
-          },
-          {
-            rotulo: "Arquivar dívida",
-            icone: <ArchiveIcon size={15} weight="bold" />,
-            confirmar: "Arquivar?",
-            executar: () => arquivarDivida(divida.id),
-          },
-          ...(semHistorico
-            ? [
-                {
-                  rotulo: "Excluir dívida",
-                  icone: <TrashIcon size={15} weight="bold" />,
-                  perigo: true,
-                  confirmar: "Excluir?",
-                  executar: () => excluirDivida(divida.id),
-                },
-              ]
-            : []),
-        ]}
-      />
+      {pagando && parcelaAberta && (
+        <FolhaPagarParcela
+          parcelaId={parcelaAberta.id}
+          numero={parcelaAberta.numero}
+          valor={parcelaAberta.valor}
+          contas={contas}
+          aoFechar={() => setPagando(false)}
+        />
+      )}
+      {children}
+    </LinhaDeslizante>
+  );
+}
+
+/**
+ * O botão de pagar que continua no bloco da próxima parcela.
+ *
+ * O gesto de arrastar dá o caminho rápido; este dá o caminho descoberto. Quem
+ * nunca arrastou uma linha na vida ainda precisa achar como pagar, e o lugar
+ * onde a pessoa procura é ao lado da parcela que está vencendo.
+ */
+export function BotaoPagarParcela({
+  parcelaId,
+  numero,
+  valor,
+  contas,
+}: {
+  parcelaId: string;
+  numero: number;
+  valor: number;
+  contas: { id: string; nome: string }[];
+}) {
+  const [aberto, setAberto] = useState(false);
+
+  return (
+    <>
+      <Button variant="outline" size="sm" onClick={() => setAberto(true)}>
+        Pagar
+      </Button>
+      {aberto && (
+        <FolhaPagarParcela
+          parcelaId={parcelaId}
+          numero={numero}
+          valor={valor}
+          contas={contas}
+          aoFechar={() => setAberto(false)}
+        />
+      )}
     </>
   );
 }

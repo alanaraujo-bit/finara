@@ -7,18 +7,22 @@ import {
   SparkleIcon,
   TrashIcon,
 } from "@phosphor-icons/react";
-import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { useState, useTransition } from "react";
 import { excluirLancamento } from "@/app/(app)/lancamentos/actions";
 import {
   FormLancamento,
   type LancamentoEditavel,
 } from "@/components/lancamentos/form-lancamento";
-import { AcoesLinha } from "@/components/ui/acoes-linha";
+import type { Acao } from "@/components/ui/acoes-linha";
 import { Badge } from "@/components/ui/badge";
 import { CardContent } from "@/components/ui/card";
+import { Carregando } from "@/components/ui/carregando";
+import { LinhaDeslizante } from "@/components/ui/linha-deslizante";
 import { Modal } from "@/components/ui/modal";
 import { rotuloData } from "@/lib/datas";
 import { formatMoney } from "@/lib/money";
+import { TATO, vibrar } from "@/lib/tato";
 import { cn } from "@/lib/utils";
 
 type Opcao = { id: string; nome: string };
@@ -172,14 +176,63 @@ function Linha({
   atraso: number;
   aoEditar: () => void;
 }) {
-  const [escopoExclusao, setEscopoExclusao] = useState<"uma" | "todas" | null>(null);
+  const [escolhendoEscopo, setEscolhendoEscopo] = useState(false);
   const parcelada = Boolean(l.parcelasTotal && l.parcelasTotal > 1);
 
+  /**
+   * As mesmas ações servem o arrasto do celular e o hover do desktop — por
+   * isso a lista mora aqui, e não dentro de um dos dois.
+   *
+   * Editar vem primeiro de propósito: é ela que o arrasto longo dispara, e a
+   * primeira posição tem que ser a ação que não estraga nada se acontecer sem
+   * querer. Excluir fica no fim, exige mirar, e ainda confirma.
+   */
+  const acoes: Acao[] = [
+    {
+      rotulo: "Editar lançamento",
+      icone: <PencilSimpleIcon size={15} weight="bold" />,
+      aoClicar: aoEditar,
+    },
+    parcelada
+      ? {
+          // Numa compra parcelada, excluir precisa saber o alcance antes:
+          // apagar só a parcela 3 de 12 é pedido legítimo, mas o caso comum é
+          // desfazer a compra inteira — e apagar tudo sem perguntar seria
+          // destrutivo. A pergunta vira uma folha, que cabe no dedo.
+          rotulo: "Excluir lançamento",
+          icone: <TrashIcon size={15} weight="bold" />,
+          perigo: true,
+          aoClicar: () => setEscolhendoEscopo(true),
+        }
+      : {
+          rotulo: "Excluir lançamento",
+          icone: <TrashIcon size={15} weight="bold" />,
+          perigo: true,
+          confirmar: "Excluir?",
+          executar: () => excluirLancamento(l.id, "uma"),
+        },
+  ];
+
   return (
-    <li
-      className="group flex animate-[fade-up_0.35s_var(--ease-out-quint)_both] items-center gap-3 px-5 py-3 transition-colors hover:bg-surface-2"
+    <LinhaDeslizante
+      as="li"
+      acoes={acoes}
+      className="animate-[fade-up_0.35s_var(--ease-out-quint)_both]"
       style={{ animationDelay: `${atraso}ms` }}
     >
+      {escolhendoEscopo && (
+        <EscolhaExclusao
+          id={l.id}
+          numero={l.parcela!}
+          total={l.parcelasTotal!}
+          aoFechar={() => setEscolhendoEscopo(false)}
+        />
+      )}
+
+      {/* Sem tinta de hover: quem responde ao ponteiro agora é a pílula de
+          ações, e um fundo que muda por baixo dela deixaria o degradê da
+          pílula (que é `--surface`) visível como uma faixa de cor errada. */}
+      <div className="flex items-center gap-3 bg-surface px-5 py-3">
       <span
         className={cn(
           "grid size-9 shrink-0 place-items-center rounded-full",
@@ -240,98 +293,96 @@ function Linha({
         </span>
       </div>
 
-      {/* Numa compra parcelada, excluir pergunta o alcance antes: apagar só a
-          parcela 3 de 12 é pedido legítimo, mas o caso comum é desfazer a
-          compra inteira — e apagar tudo sem perguntar seria destrutivo. */}
-      {parcelada && escopoExclusao === null ? (
-        <EscolhaExclusao
-          total={l.parcelasTotal!}
-          numero={l.parcela!}
-          aoEditar={aoEditar}
-          aoEscolher={setEscopoExclusao}
-        />
-      ) : (
-        <AcoesLinha
-          key={escopoExclusao ?? "simples"}
-          acoes={[
-            {
-              rotulo: "Editar lançamento",
-              icone: <PencilSimpleIcon size={15} weight="bold" />,
-              aoClicar: aoEditar,
-            },
-            {
-              rotulo:
-                escopoExclusao === "todas" ? "Excluir a compra inteira" : "Excluir lançamento",
-              icone: <TrashIcon size={15} weight="bold" />,
-              perigo: true,
-              confirmar: escopoExclusao === "todas" ? "Excluir as parcelas?" : "Excluir?",
-              executar: () => excluirLancamento(l.id, escopoExclusao ?? "uma"),
-            },
-          ]}
-        />
-      )}
-    </li>
+      </div>
+    </LinhaDeslizante>
   );
 }
 
-/** Passo intermediario so' das compras parceladas. */
+/**
+ * A pergunta de alcance das compras parceladas, numa folha.
+ *
+ * Era uma fileira de três botõezinhos dentro da própria linha — cabia no
+ * mouse, não cabia no dedo, e empurrava o valor da compra para fora da tela
+ * enquanto estava aberta. Como folha, a escolha ganha o texto inteiro ("as 12
+ * parcelas desta compra"), fica longe do gesto que a abriu e some sozinha ao
+ * arrastar para baixo.
+ */
 function EscolhaExclusao({
-  total,
+  id,
   numero,
-  aoEditar,
-  aoEscolher,
+  total,
+  aoFechar,
 }: {
-  total: number;
+  id: string;
   numero: number;
-  aoEditar: () => void;
-  aoEscolher: (escopo: "uma" | "todas") => void;
+  total: number;
+  aoFechar: () => void;
 }) {
-  const [aberto, setAberto] = useState(false);
+  const router = useRouter();
+  const [pendente, iniciar] = useTransition();
+  const [erro, setErro] = useState<string | null>(null);
 
-  if (!aberto) {
-    return (
-      <AcoesLinha
-        acoes={[
-          {
-            rotulo: "Editar lançamento",
-            icone: <PencilSimpleIcon size={15} weight="bold" />,
-            aoClicar: aoEditar,
-          },
-          {
-            rotulo: "Excluir lançamento",
-            icone: <TrashIcon size={15} weight="bold" />,
-            perigo: true,
-            aoClicar: () => setAberto(true),
-          },
-        ]}
-      />
-    );
+  function excluir(escopo: "uma" | "todas") {
+    setErro(null);
+    iniciar(async () => {
+      const r = await excluirLancamento(id, escopo);
+      if (r?.erro) {
+        setErro(r.erro);
+        return;
+      }
+      vibrar(TATO.concluido);
+      aoFechar();
+      router.refresh();
+    });
   }
 
   return (
-    <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
-      <span className="text-[11.5px] text-muted">Excluir</span>
-      <button
-        type="button"
-        onClick={() => aoEscolher("uma")}
-        className="rounded-lg border border-border px-2 py-1 text-[11.5px] text-text transition-colors hover:bg-surface-2"
-      >
-        só a {numero}/{total}
-      </button>
-      <button
-        type="button"
-        onClick={() => aoEscolher("todas")}
-        className="rounded-lg border border-border px-2 py-1 text-[11.5px] text-text transition-colors hover:bg-surface-2"
-      >
-        as {total} parcelas
-      </button>
-      <button
-        type="button"
-        onClick={() => setAberto(false)}
-        className="rounded-lg px-2 py-1 text-[11.5px] text-muted transition-colors hover:bg-surface-2"
-      >
-        cancelar
-      </button>
-    </div>
+    <Modal
+      aberto
+      aoFechar={aoFechar}
+      titulo="Excluir compra parcelada"
+      descricao={`Esta é a parcela ${numero} de ${total}.`}
+    >
+      <div className="space-y-2">
+        <button
+          type="button"
+          disabled={pendente}
+          onClick={() => excluir("uma")}
+          className="w-full rounded-xl border border-border p-4 text-left transition-colors hover:bg-surface-2 disabled:opacity-50"
+        >
+          <p className="text-[14px] font-medium text-text">
+            Só a parcela {numero}/{total}
+          </p>
+          <p className="mt-0.5 text-[12.5px] text-muted">
+            As outras {total - 1} continuam no extrato e na fatura.
+          </p>
+        </button>
+
+        <button
+          type="button"
+          disabled={pendente}
+          onClick={() => excluir("todas")}
+          className="w-full rounded-xl border border-expense/40 bg-expense-soft p-4 text-left transition-colors hover:brightness-[0.97] disabled:opacity-50"
+        >
+          <p className="text-[14px] font-medium text-expense">A compra inteira</p>
+          <p className="mt-0.5 text-[12.5px] text-expense/80">
+            Apaga as {total} parcelas de uma vez. Não tem volta.
+          </p>
+        </button>
+
+        {erro && (
+          <p role="alert" className="pt-1 text-[12.5px] leading-snug text-expense">
+            {erro}
+          </p>
+        )}
+
+        {pendente && (
+          <p className="flex items-center justify-center gap-2 pt-1 text-[12.5px] text-muted">
+            <Carregando size={15} rotulo={null} />
+            Excluindo...
+          </p>
+        )}
+      </div>
+    </Modal>
   );
 }

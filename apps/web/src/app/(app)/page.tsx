@@ -12,6 +12,7 @@ import {
 } from "@phosphor-icons/react/dist/ssr";
 import type { Metadata } from "next";
 import Link from "next/link";
+import { Suspense } from "react";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -31,25 +32,24 @@ export const metadata: Metadata = {
   title: "Visão geral",
 };
 
+/**
+ * A tela de abertura do app — `start_url` do manifesto aponta para cá, então
+ * é ela que roda toda vez que alguém toca no ícone.
+ *
+ * Por isso o cabeçalho está FORA do `<Suspense>` e as consultas estão dentro.
+ * Antes, a página inteira era um `await` só: o servidor não mandava byte
+ * nenhum enquanto as quatro consultas não voltassem, e o app ficava numa tela
+ * vazia esse tempo todo. Agora o primeiro pedaço do HTML — moldura, saudação,
+ * botão de lançar — sai imediatamente, e os números chegam por cima quando
+ * ficam prontos, sem uma segunda viagem à rede.
+ *
+ * `exigirSessao()` continua aqui em cima e não custa nada: o layout do grupo
+ * já a resolveu, e o `cache()` do React faz esta chamada devolver o mesmo
+ * resultado sem tocar no banco de novo.
+ */
 export default async function DashboardPage() {
   const { usuario, workspace } = await exigirSessao();
-  const ws = workspace.workspaceId;
-
-  const [resumo, categorias, recentes, vencimentos] = await Promise.all([
-    obterResumo(ws),
-    obterGastosPorCategoria(ws),
-    obterLancamentosRecentes(ws, 6),
-    obterProximosVencimentos(ws),
-  ]);
-
-  const saldo = splitMoney(resumo.saldoTotal);
-  const totalCategorias = categorias.reduce((acc, c) => acc + c.valor, 0);
-  const hoje = paraDataLocal();
   const primeiroNome = workspace.displayName ?? usuario.name.split(/\s+/)[0];
-
-  // Conta nova: nada de mostrar seis cartoes zerados, que so' dao a impressao
-  // de app quebrado. Mostramos o caminho a seguir.
-  const contaVazia = resumo.totalContas === 0 && recentes.length === 0;
 
   return (
     <div className="mx-auto w-full max-w-[1320px] px-4 py-6 sm:px-6 lg:px-8 lg:py-10">
@@ -69,6 +69,31 @@ export default async function DashboardPage() {
         </div>
       </header>
 
+      <Suspense fallback={<EsqueletoPainel />}>
+        <Painel workspaceId={workspace.workspaceId} />
+      </Suspense>
+    </div>
+  );
+}
+
+async function Painel({ workspaceId: ws }: { workspaceId: string }) {
+  const [resumo, categorias, recentes, vencimentos] = await Promise.all([
+    obterResumo(ws),
+    obterGastosPorCategoria(ws),
+    obterLancamentosRecentes(ws, 6),
+    obterProximosVencimentos(ws),
+  ]);
+
+  const saldo = splitMoney(resumo.saldoTotal);
+  const totalCategorias = categorias.reduce((acc, c) => acc + c.valor, 0);
+  const hoje = paraDataLocal();
+
+  // Conta nova: nada de mostrar seis cartoes zerados, que so' dao a impressao
+  // de app quebrado. Mostramos o caminho a seguir.
+  const contaVazia = resumo.totalContas === 0 && recentes.length === 0;
+
+  return (
+    <>
       {contaVazia ? (
         <Card
           className="mt-6 animate-[fade-up_0.45s_var(--ease-out-quint)_both]"
@@ -364,6 +389,77 @@ export default async function DashboardPage() {
           </section>
         </>
       )}
+    </>
+  );
+}
+
+/**
+ * O esqueleto do painel.
+ *
+ * Existe para o conteúdo NÃO pular quando chegar: as caixas têm a grade e as
+ * alturas do painel real. Um "carregando" centralizado seria mais fácil de
+ * escrever e pior de usar — a tela mudaria de forma duas vezes em vez de uma,
+ * e é justamente esse segundo salto que faz um app parecer lento mesmo quando
+ * não é.
+ */
+function EsqueletoPainel() {
+  return (
+    <div aria-hidden className="animate-[fade-in_0.3s_var(--ease-out-quint)_both]">
+      <section className="mt-6 grid gap-4 lg:grid-cols-[1.35fr_1fr]">
+        <Card>
+          <CardContent className="p-6">
+            <div className="skeleton h-4 w-24 rounded-md" />
+            <div className="skeleton mt-4 h-11 w-56 rounded-lg" />
+            <div className="skeleton mt-3 h-3.5 w-32 rounded-md" />
+            <div className="mt-6 grid grid-cols-2 gap-3">
+              <div className="skeleton h-[70px] rounded-xl" />
+              <div className="skeleton h-[70px] rounded-xl" />
+            </div>
+          </CardContent>
+        </Card>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
+          <Card>
+            <CardContent className="p-5">
+              <div className="skeleton h-[62px] rounded-xl" />
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-5">
+              <div className="skeleton h-[62px] rounded-xl" />
+            </CardContent>
+          </Card>
+        </div>
+      </section>
+
+      <section className="mt-4 grid gap-4 lg:grid-cols-[1.35fr_1fr]">
+        <Card>
+          <CardContent className="space-y-4 p-5">
+            {[0, 1, 2, 3].map((i) => (
+              <div key={i}>
+                <div className="skeleton h-3.5 w-full rounded-md" />
+                <div className="skeleton mt-2 h-1.5 w-full rounded-full" />
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="space-y-3 p-5">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="skeleton h-[42px] rounded-xl" />
+            ))}
+          </CardContent>
+        </Card>
+      </section>
+
+      <section className="mt-4">
+        <Card>
+          <CardContent className="space-y-3 p-5">
+            {[0, 1, 2, 3].map((i) => (
+              <div key={i} className="skeleton h-[46px] rounded-xl" />
+            ))}
+          </CardContent>
+        </Card>
+      </section>
     </div>
   );
 }
