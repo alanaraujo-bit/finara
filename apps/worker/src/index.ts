@@ -20,7 +20,28 @@ import { enfileirarSync, iniciarWorker } from "./queue";
  *    trabalho pesado.
  */
 const app = Fastify({
-  logger: { level: "info" },
+  logger: {
+    level: "info",
+    serializers: {
+      /**
+       * Mascara o segredo do webhook antes de qualquer coisa ir pro log.
+       *
+       * Ele viaja no CAMINHO da URL, e o log padrao do Fastify registra a URL
+       * inteira — o que colocaria a credencial em texto puro no painel do
+       * Railway, onde fica retida e visivel pra quem tiver acesso ao projeto.
+       */
+      req(requisicao) {
+        return {
+          method: requisicao.method,
+          url: requisicao.url.replace(
+            /\/webhooks\/pluggy\/[^/?]+/,
+            "/webhooks/pluggy/<oculto>",
+          ),
+          remoteAddress: requisicao.ip,
+        };
+      },
+    },
+  },
   // O Railway fica atras de proxy; sem isto o IP do cliente vem errado.
   trustProxy: true,
 });
