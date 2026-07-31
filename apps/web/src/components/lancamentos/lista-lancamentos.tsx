@@ -345,6 +345,18 @@ function EscolhaExclusao({
   const [pendente, iniciar] = useTransition();
   const [erro, setErro] = useState<string | null>(null);
 
+  /**
+   * Esta folha nasce aberta e vive enquanto a linha a mantiver montada — uma
+   * por linha, entao deixa-la montada o tempo todo encheria a lista de folhas
+   * escondidas.
+   *
+   * O estado existe para separar as duas coisas que antes eram uma so':
+   * "fechar" (pedir a saida, que e' animada) e "sumir" (o `aoFechar` do pai,
+   * que desmonta). Concluir a exclusao agora so' pede a saida; o pai desmonta
+   * quando a folha ja' desceu.
+   */
+  const [aberta, setAberta] = useState(true);
+
   function excluir(escopo: "uma" | "todas") {
     setErro(null);
     iniciar(async () => {
@@ -354,14 +366,14 @@ function EscolhaExclusao({
         return;
       }
       vibrar(TATO.concluido);
-      aoFechar();
+      setAberta(false);
       router.refresh();
     });
   }
 
   return (
     <Modal
-      aberto
+      aberto={aberta}
       aoFechar={aoFechar}
       titulo="Excluir compra parcelada"
       descricao={`Esta é a parcela ${numero} de ${total}.`}
@@ -371,7 +383,7 @@ function EscolhaExclusao({
           type="button"
           disabled={pendente}
           onClick={() => excluir("uma")}
-          className="w-full rounded-xl border border-border p-4 text-left transition-colors hover:bg-surface-2 disabled:opacity-50"
+          className="pressionavel w-full rounded-xl border border-border p-4 text-left hover:bg-surface-2 disabled:opacity-50"
         >
           <p className="text-[14px] font-medium text-text">
             Só a parcela {numero}/{total}
@@ -384,8 +396,10 @@ function EscolhaExclusao({
         <button
           type="button"
           disabled={pendente}
+          // `so-recuo`: esta e' a opcao destrutiva e o vermelho e' o aviso.
+          // Trocar o fundo no toque apagaria justamente o sinal.
           onClick={() => excluir("todas")}
-          className="w-full rounded-xl border border-expense/40 bg-expense-soft p-4 text-left transition-colors hover:brightness-[0.97] disabled:opacity-50"
+          className="pressionavel-so-recuo w-full rounded-xl border border-expense/40 bg-expense-soft p-4 text-left hover:brightness-[0.97] disabled:opacity-50"
         >
           <p className="text-[14px] font-medium text-expense">A compra inteira</p>
           <p className="mt-0.5 text-[12.5px] text-expense/80">

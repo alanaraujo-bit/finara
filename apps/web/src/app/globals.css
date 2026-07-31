@@ -598,6 +598,49 @@
   .pt-safe {
     padding-top: max(env(safe-area-inset-top), 0rem);
   }
+
+  /**
+   * SUPERFICIE QUE RESPONDE AO DEDO
+   *
+   * `hover:` nao existe para o toque. Uma linha de lista ou um cartao de
+   * escolha que so' declara `hover:bg-surface-2` fica, no celular, sem
+   * resposta nenhuma: o dedo encosta, some a mao, e a tela nao acusou nada
+   * entre o toque e a proxima tela aparecer. E' o que faz um app parecer
+   * "seco" mesmo com todas as animacoes de entrada no lugar — a que falta e'
+   * a que responde a VOCE, e nao a que acontece sozinha.
+   *
+   * O `<Button>` ja' tinha esse recuo embutido; isto e' o mesmo gesto para as
+   * superficies grandes que nao sao botao (opcoes dentro das folhas, linhas
+   * clicaveis, o alternador de tema).
+   *
+   * A escala e' menor que a do botao — 0.985 contra 0.98 — porque quanto
+   * maior a superficie, menos deslocamento e' preciso para ler como afundar.
+   * Numa faixa da largura da tela, 2% ja' vira elastico de brinquedo.
+   *
+   * `transform` e `background-color` sao as duas propriedades que o navegador
+   * resolve sem refazer layout, entao isto e' de graca mesmo em lista longa.
+   */
+  .pressionavel {
+    transition:
+      transform 0.18s var(--ease-out-quint),
+      background-color 0.18s var(--ease-out-quint);
+  }
+
+  .pressionavel:active {
+    transform: scale(0.985);
+    background-color: var(--surface-2);
+  }
+
+  /* Variante sem tinta: para superficie que ja' tem cor propria (o botao de
+     "a compra inteira", que e' vermelho) ou que vive sobre fundo colorido —
+     mudar o fundo ali brigaria com o significado da cor. */
+  .pressionavel-so-recuo {
+    transition: transform 0.18s var(--ease-out-quint);
+  }
+
+  .pressionavel-so-recuo:active {
+    transform: scale(0.985);
+  }
 }
 
 /* ============================================================================
@@ -658,11 +701,17 @@
   overflow: clip;
 
   /* `display` e `overlay` precisam de allow-discrete: sem isso o navegador
-     tira o dialog da top layer no primeiro quadro e a saida nao anima. */
+     tira o dialog da top layer no primeiro quadro e a saida nao anima.
+
+     Os 0.3s de `display`/`overlay` sao MAIORES que os 0.28s do deslize do
+     painel de proposito: sao eles que seguram o dialog na top layer, e se
+     acabassem antes a folha sumiria no meio do proprio movimento de saida.
+     A opacidade e' mais curta (0.24s) porque o que esta' indo embora nao
+     deve disputar atencao ate' o ultimo quadro. */
   transition:
     opacity 0.24s var(--ease-out-quint),
-    display 0.24s allow-discrete,
-    overlay 0.24s allow-discrete;
+    display 0.3s allow-discrete,
+    overlay 0.3s allow-discrete;
   opacity: 0;
 }
 
@@ -725,10 +774,29 @@
   border-bottom: 0;
   border-radius: var(--radius-2xl) var(--radius-2xl) 0 0;
   box-shadow: 0 -8px 40px rgb(0 0 0 / 0.28);
-  transform: translateY(0);
   transition: transform 0.28s var(--ease-out-quint);
+
+  /**
+   * ESTADO FECHADO — e' desta posicao que a folha sai e e' para ela que volta.
+   *
+   * Antes o repouso era `translateY(0)` e o `@starting-style` abaixo cuidava
+   * so' da ENTRADA. A folha sabia chegar e nao sabia ir embora: fechar era um
+   * corte seco, porque nao havia estado de saida nenhum para onde transitar —
+   * o `allow-discrete` do dialog segurava a caixa na top layer por 240ms
+   * desenhando exatamente o mesmo quadro, e depois ela sumia.
+   *
+   * Com o repouso em `translateY(100%)`, tirar o `[open]` ja' e' a animacao de
+   * saida: a folha desce por onde subiu. Uma declaracao, os dois sentidos.
+   */
+  transform: translateY(100%);
 }
 
+.fmodal[open] .fmodal-painel {
+  transform: translateY(0);
+}
+
+/* Na abertura o painel vem de `display: none`, e dali o navegador nao
+   transiciona — `@starting-style` e' o que da' um quadro inicial de onde sair. */
 @starting-style {
   .fmodal[open] .fmodal-painel {
     transform: translateY(100%);
@@ -796,12 +864,19 @@
     border: 1px solid var(--border);
     border-radius: var(--radius-2xl);
     box-shadow: 0 24px 60px rgb(0 0 0 / 0.24);
+
+    /* No desktop a caixa cresce em vez de subir: deslizar a tela inteira num
+       monitor grande vira movimento longo demais. O repouso tambem muda aqui,
+       senao a caixa centrada sairia descendo uma altura de tela inteira. */
+    transform: translateY(10px) scale(0.97);
+  }
+
+  .fmodal[open] .fmodal-painel {
+    transform: none;
   }
 
   @starting-style {
     .fmodal[open] .fmodal-painel {
-      /* No desktop a caixa cresce em vez de subir: deslizar a tela inteira
-         num monitor grande vira movimento longo demais. */
       transform: translateY(10px) scale(0.97);
     }
   }

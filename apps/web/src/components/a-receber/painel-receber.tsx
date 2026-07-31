@@ -261,10 +261,14 @@ function FolhaReceber({
   const router = useRouter();
   const [contaId, setContaId] = useState("");
   const [pendente, iniciar] = useTransition();
+  // Separa "pedir a saida" de "sumir": registrar o recebimento fecha a folha,
+  // e o `aoFechar` do pai (que desmonta) so' chega quando ela terminou de
+  // descer. Ver o mesmo padrao em `lista-lancamentos`.
+  const [aberta, setAberta] = useState(true);
 
   return (
     <Modal
-      aberto
+      aberto={aberta}
       aoFechar={aoFechar}
       titulo="Registrar recebimento"
       descricao={`${nome} — ${formatMoney(valor)}`}
@@ -298,7 +302,7 @@ function FolhaReceber({
             iniciar(async () => {
               await receber(id, contaId || undefined);
               vibrar(TATO.concluido);
-              aoFechar();
+              setAberta(false);
               router.refresh();
             })
           }

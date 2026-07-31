@@ -214,7 +214,8 @@ export function BotaoIcone({
       aria-label={rotulo}
       onClick={onClick}
       className={cn(
-        "grid size-8 place-items-center rounded-lg text-subtle transition-colors",
+        "grid size-8 place-items-center rounded-lg text-subtle",
+        "transition-[color,background-color,transform] duration-200 active:scale-[0.9]",
         perigo ? "hover:bg-surface-2 hover:text-expense" : "hover:bg-surface-2 hover:text-text",
       )}
     >

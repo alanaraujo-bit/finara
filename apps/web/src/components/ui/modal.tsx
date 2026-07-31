@@ -1,8 +1,49 @@
 "use client";
 
 import { XIcon } from "@phosphor-icons/react";
-import { useEffect, useId, useRef, useState, type PointerEvent, type ReactNode } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type PointerEvent,
+  type ReactNode,
+} from "react";
 import { cn } from "@/lib/utils";
+
+/**
+ * Como o CONTEUDO da folha pede para ela se fechar.
+ *
+ * Existe porque quem conclui uma acao esta' dentro da folha (o formulario que
+ * salvou, a opcao que foi escolhida) e ate' agora avisava o componente de FORA
+ * — que desmontava a caixa na hora. A folha sumia num quadro, sem chance de
+ * sair animada, exatamente como se tivesse dado erro.
+ *
+ * Pedindo por aqui, a saida e' a mesma do X e do arrasto: um caminho so' para
+ * fechar, aconteca o que acontecer.
+ *
+ * Devolve `null` fora de uma folha — `FormLancamento` tambem vive numa pagina
+ * inteira (`/lancamentos/novo`), e la' concluir e' navegar, nao fechar.
+ */
+const FecharFolha = createContext<(() => void) | null>(null);
+
+export function useFecharFolha() {
+  return useContext(FecharFolha);
+}
+
+/**
+ * Quanto esperar pela saida se o `transitionend` nao vier.
+ *
+ * Ele vem em todo caminho normal, inclusive com `prefers-reduced-motion` (que
+ * encurta a duracao para 0.01ms, mas ainda dispara o evento). A rede de
+ * seguranca e' para o caso patologico — a aba perde a visibilidade no meio da
+ * saida e o navegador suspende as transicoes. Sem ela, o estado do pai ficaria
+ * presto em "aberto" para sempre e a folha nao reabriria.
+ */
+const SAIDA_MAX_MS = 600;
 
 /**
  * Modal do Finara, sobre o `<dialog>` nativo.
@@ -40,6 +81,32 @@ export function Modal({
   // Deslocamento do arrasto, em pixels. Null = nao esta' arrastando.
   const [arrasto, setArrasto] = useState<number | null>(null);
   const inicioY = useRef(0);
+
+  /**
+   * PEDIR PARA FECHAR NAO E' FECHAR.
+   *
+   * Todo caminho de saida — o X, o toque no fundo, o arrasto, o `Esc`, o
+   * formulario que salvou — passa por aqui, e aqui so' se pede ao `<dialog>`
+   * que se feche. Quem avisa o componente de fora e' o `close` la' embaixo,
+   * DEPOIS que a folha terminou de descer.
+   *
+   * A inversao e' o conserto do corte seco. Antes, cada um desses caminhos
+   * chamava `aoFechar` direto; o pai zerava o estado, o React desmontava o
+   * `<dialog>` no mesmo commit, e a animacao de saida — que o CSS declara com
+   * `display`/`overlay` em `allow-discrete` justamente para isso — nunca tinha
+   * um elemento em que rodar. Medido: um quadro com a folha inteira, o
+   * seguinte sem nada.
+   */
+  const pedirFechamento = useCallback(() => {
+    const dialog = ref.current;
+    // Sem dialog aberto nao ha' o que animar; avisa direto para nao travar
+    // quem esta' esperando o fechamento.
+    if (!dialog?.open) {
+      aoFechar();
+      return;
+    }
+    dialog.close();
+  }, [aoFechar]);
 
   /**
    * TRAVA DE ROLAGEM COM A POSICAO PRESERVADA
@@ -162,9 +229,49 @@ export function Modal({
   function aoArrastarFim() {
     if (arrasto === null) return;
     const percorreu = arrasto;
+    // Zerar o arrasto ANTES de pedir o fechamento tira o `transition: none`
+    // inline que o gesto instalava. Sem isso a folha ficaria congelada na
+    // altura em que o dedo a largou e sumiria dali — o `transition: none` que
+    // serve ao arrasto (onde a folha tem que colar no dedo) venceria a
+    // animacao de saida.
     setArrasto(null);
     // 96px e' o ponto em que o gesto ja' foi claramente intencional.
-    if (percorreu > 96) aoFechar();
+    if (percorreu > 96) pedirFechamento();
+  }
+
+  /**
+   * O `<dialog>` terminou de fechar — agora e' esperar a folha descer.
+   *
+   * `close()` tira o `[open]` e a partir dai' o CSS anima a saida. Avisar o
+   * componente de fora neste instante seria o mesmo corte seco de antes, so'
+   * que por outro caminho: ele desmontaria a caixa no meio do movimento.
+   */
+  function aoDialogFechar() {
+    const painel = painelRef.current;
+    if (!painel) {
+      aoFechar();
+      return;
+    }
+
+    let encerrado = false;
+
+    const encerrar = () => {
+      if (encerrado) return;
+      encerrado = true;
+      painel.removeEventListener("transitionend", aoTerminar);
+      clearTimeout(rede);
+      aoFechar();
+    };
+
+    const aoTerminar = (evento: TransitionEvent) => {
+      // So' o `transform` do proprio painel. `transitionend` sobe por
+      // bubbling: sem este filtro, qualquer campo la' dentro terminando a
+      // transicao de foco encerraria a saida no meio.
+      if (evento.target === painel && evento.propertyName === "transform") encerrar();
+    };
+
+    painel.addEventListener("transitionend", aoTerminar);
+    const rede = setTimeout(encerrar, SAIDA_MAX_MS);
   }
 
   return (
@@ -175,10 +282,10 @@ export function Modal({
       aria-describedby={descricao ? descricaoId : undefined}
       // Dispara no Esc e no close() — e' o ponto unico que devolve o estado
       // para quem abriu, sem depender de cada caminho de fechamento.
-      onClose={aoFechar}
+      onClose={aoDialogFechar}
       onClick={(evento) => {
         // Clique no fundo (o proprio dialog), nao no painel.
-        if (evento.target === ref.current) aoFechar();
+        if (evento.target === ref.current) pedirFechamento();
       }}
     >
       <div
@@ -217,15 +324,20 @@ export function Modal({
 
           <button
             type="button"
-            onClick={aoFechar}
+            onClick={pedirFechamento}
             aria-label="Fechar"
-            className="-mr-1.5 grid size-9 shrink-0 place-items-center rounded-xl text-subtle transition-colors hover:bg-surface-2 hover:text-text"
+            className={cn(
+              "-mr-1.5 grid size-9 shrink-0 place-items-center rounded-xl text-subtle",
+              "pressionavel hover:bg-surface-2 hover:text-text",
+            )}
           >
             <XIcon size={17} weight="bold" />
           </button>
         </header>
 
-        <div className="fmodal-corpo">{children}</div>
+        <div className="fmodal-corpo">
+          <FecharFolha value={pedirFechamento}>{children}</FecharFolha>
+        </div>
       </div>
     </dialog>
   );

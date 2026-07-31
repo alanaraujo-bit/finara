@@ -14,7 +14,9 @@ export function Select({ className, children, ...props }: ComponentProps<"select
         className={cn(
           "h-11 w-full appearance-none rounded-xl border border-border bg-surface pl-3.5 pr-10",
           "text-[15px] text-text",
-          "transition-[border-color,box-shadow] duration-200",
+          // O recuo confirma o toque no intervalo entre o dedo encostar e o
+          // seletor do sistema subir — que no celular nao e' instantaneo.
+          "transition-[border-color,box-shadow,transform] duration-200 active:scale-[0.99]",
           "hover:border-border-strong",
           "focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/12",
           "disabled:cursor-not-allowed disabled:opacity-60",
@@ -68,6 +70,10 @@ export function SegmentedField({
             onClick={() => aoMudar(o.valor)}
             className={cn(
               "h-9 rounded-lg text-[13.5px] font-medium transition-all duration-200",
+              // Recuo um pouco mais fundo que o das superficies grandes: o
+              // alvo e' pequeno e divide a moldura com o irmao, entao precisa
+              // de mais deslocamento para o olho separar qual dos dois afundou.
+              "active:scale-[0.96]",
               ativo
                 ? o.tom === "income"
                   ? "bg-income-soft text-income shadow-xs"

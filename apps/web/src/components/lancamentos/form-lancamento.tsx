@@ -10,9 +10,11 @@ import {
 import { Button } from "@/components/ui/button";
 import { Carregando } from "@/components/ui/carregando";
 import { FieldError, Input, Label } from "@/components/ui/input";
+import { useFecharFolha } from "@/components/ui/modal";
 import { SegmentedField, Select } from "@/components/ui/select";
 import { mesmoDiaNoMes, mesPorExtenso } from "@/lib/datas";
 import { formatMoney, formatMoneyBare, parseMoney } from "@/lib/money";
+import { TATO, vibrar } from "@/lib/tato";
 
 type Opcao = { id: string; nome: string; tipo?: string };
 
@@ -76,6 +78,9 @@ export function FormLancamento({
 }) {
   const router = useRouter();
   const editando = Boolean(lancamento);
+  // `null` quando o formulario esta' numa pagina inteira (`/lancamentos/novo`),
+  // onde concluir e' navegar e nao ha' folha para fechar.
+  const fecharFolha = useFecharFolha();
 
   const [estado, acao, pendente] = useActionState<EstadoLancamento, FormData>(
     async (anterior, form) => {
@@ -85,7 +90,15 @@ export function FormLancamento({
       // efeito com setState dispara render em cascata (e' o que a regra
       // react-hooks/set-state-in-effect acusa).
       if (r.ok) {
-        aoConcluir?.();
+        // O mesmo pulso duplo de toda conclusao no app. Vem antes do
+        // fechamento: confirma no dedo no instante em que deu certo, sem
+        // esperar a folha terminar de descer.
+        vibrar(TATO.concluido);
+        // Dentro de uma folha, concluir E' fechar — e o fechamento da folha
+        // tem animacao de saida. Chamar `aoConcluir` aqui arrancaria a caixa
+        // do DOM no mesmo quadro, que era o corte seco ao salvar.
+        if (fecharFolha) fecharFolha();
+        else aoConcluir?.();
         router.refresh();
       }
       return r;

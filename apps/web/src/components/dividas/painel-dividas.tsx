@@ -410,10 +410,13 @@ export function FolhaPagarParcela({
   const router = useRouter();
   const [contaId, setContaId] = useState("");
   const [pendente, iniciar] = useTransition();
+  // Ver `lista-lancamentos`: pagar a parcela pede a saida da folha; quem
+  // desmonta e' o pai, depois que ela desceu.
+  const [aberta, setAberta] = useState(true);
 
   return (
     <Modal
-      aberto
+      aberto={aberta}
       aoFechar={aoFechar}
       titulo={`Pagar a parcela ${numero}`}
       descricao="Vira um lançamento no extrato e sai do saldo da conta escolhida."
@@ -451,7 +454,7 @@ export function FolhaPagarParcela({
             iniciar(async () => {
               await pagarParcela(parcelaId, contaId || undefined);
               vibrar(TATO.concluido);
-              aoFechar();
+              setAberta(false);
               router.refresh();
             })
           }

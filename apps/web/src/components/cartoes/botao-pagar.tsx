@@ -32,13 +32,17 @@ export function BotaoPagar({ faturaId, valor }: { faturaId: string; valor: strin
         Marcar como paga
       </Button>
 
-      {confirmando && (
-        <Modal
-          aberto
-          aoFechar={() => setConfirmando(false)}
-          titulo="Pagar a fatura"
-          descricao="O valor sai do saldo da conta de pagamento do cartão e a fatura é fechada."
-        >
+      {/* Montada sempre, comandada por `aberto` — e nao montada so' quando
+          aberta. Enquanto era `{confirmando && <Modal>}`, confirmar o
+          pagamento arrancava a folha do DOM no mesmo quadro e a animacao de
+          saida nao tinha em que rodar. Uma folha parada no DOM nao custa nada;
+          o corte seco custava a sensacao do app inteiro. */}
+      <Modal
+        aberto={confirmando}
+        aoFechar={() => setConfirmando(false)}
+        titulo="Pagar a fatura"
+        descricao="O valor sai do saldo da conta de pagamento do cartão e a fatura é fechada."
+      >
           <div className="space-y-4">
             <div className="rounded-xl border border-border bg-surface-2/60 p-4 text-center">
               <p className="text-[12px] font-medium uppercase tracking-wide text-subtle">
@@ -79,8 +83,7 @@ export function BotaoPagar({ faturaId, valor }: { faturaId: string; valor: strin
               Dá para desfazer depois, pelo botão que aparece na fatura paga.
             </p>
           </div>
-        </Modal>
-      )}
+      </Modal>
     </>
   );
 }
