@@ -5,7 +5,11 @@ packages:
 # esbuild: usado pelo drizzle-kit
 # sharp: otimizacao de imagens do Next
 # unrs-resolver: resolver do eslint
+# msgpackr-extract: acelerador nativo opcional do BullMQ. Desligado de
+# proposito — o msgpackr cai pra JS puro sem perda funcional, e assim o
+# deploy no Railway nao depende de compilar modulo nativo.
 allowBuilds:
   esbuild: true
+  msgpackr-extract: false
   sharp: true
   unrs-resolver: true

@@ -24,16 +24,25 @@ export function obterPluggy(): PluggyClient {
   return cliente;
 }
 
-/** URL publica que o Pluggy chama nos eventos. Sem ela, nao ha' sincronizacao. */
+/**
+ * URL que o Pluggy chama nos eventos. Aponta para o WORKER no Railway, nao
+ * para este app na Vercel, por dois motivos:
+ *
+ *  - a implantacao da Vercel esta' protegida por login, entao o Pluggy
+ *    receberia 401 e nenhum evento chegaria;
+ *  - a importacao de extrato nao cabe nos 5 segundos que a documentacao
+ *    exige de resposta, nem sobrevive ao fim de uma funcao serverless.
+ *
+ * Funciona tambem em desenvolvimento: o worker e' publico, entao um banco
+ * conectado do localhost e' sincronizado normalmente la'.
+ */
 export function urlWebhook(): string | undefined {
-  const base = process.env.NEXT_PUBLIC_APP_URL;
+  const base = process.env.WORKER_URL;
   const segredo = process.env.PLUGGY_WEBHOOK_SECRET;
 
-  // Em localhost nao adianta registrar webhook: o Pluggy nao alcanca a
-  // maquina do usuario. Deixamos indefinido em vez de mandar URL invalida.
-  if (!base || base.includes("localhost") || !segredo) return undefined;
+  if (!base || !segredo) return undefined;
 
-  return `${base}/api/webhooks/pluggy/${segredo}`;
+  return `${base.replace(/\/$/, "")}/webhooks/pluggy/${segredo}`;
 }
 
 /**

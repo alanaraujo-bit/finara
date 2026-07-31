@@ -21,6 +21,16 @@ if (!connectionString) {
  */
 const isServerless = Boolean(process.env.VERCEL);
 
+/**
+ * TLS so' quando o trafego sai da rede do Railway.
+ *
+ * `*.railway.internal` e' a rede privada interna: o worker fala com o Postgres
+ * por ali, sem passar pela internet, e esse listener nao serve TLS — exigir
+ * SSL nessa rota quebra a conexao. Do localhost e da Vercel a conexao vai pelo
+ * proxy publico, onde TLS e' obrigatorio.
+ */
+const usaRedeInterna = connectionString.includes(".railway.internal");
+
 const globalForDb = globalThis as unknown as {
   __finaraClient?: ReturnType<typeof postgres>;
 };
@@ -28,7 +38,7 @@ const globalForDb = globalThis as unknown as {
 const client =
   globalForDb.__finaraClient ??
   postgres(connectionString, {
-    ssl: "require",
+    ssl: usaRedeInterna ? false : "require",
     max: isServerless ? 1 : 10,
     idle_timeout: 20,
     connect_timeout: 15,
