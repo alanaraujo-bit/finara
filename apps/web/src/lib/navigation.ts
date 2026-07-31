@@ -6,6 +6,7 @@ import {
   GearIcon,
   HandCoinsIcon,
   HouseIcon,
+  PlugsConnectedIcon,
   ReceiptIcon,
   RepeatIcon,
   SquaresFourIcon,
@@ -48,6 +49,7 @@ export const navigation: NavGroup[] = [
     items: [
       { href: "/contas", label: "Contas", icon: BankIcon },
       { href: "/categorias", label: "Categorias", icon: SquaresFourIcon },
+      { href: "/conexoes", label: "Conexões", icon: PlugsConnectedIcon },
       { href: "/ajustes", label: "Ajustes", icon: GearIcon },
     ],
   },
