@@ -632,7 +632,30 @@
   max-width: none;
   max-height: none;
   background: transparent;
-  overflow: hidden;
+
+  /* `clip`, e NAO `hidden`.
+   *
+   * Os dois recortam igual, mas `hidden` deixa a caixa sendo um CONTAINER
+   * ROLAVEL — ela so' nao rola pelo dedo. Rolar por programa continua valendo,
+   * e era exatamente isso que quebrava a abertura:
+   *
+   * a folha entra em `translateY(100%)` (o @starting-style la' embaixo), o que
+   * a joga uma altura inteira para baixo e faz o conteudo do dialog medir 1567
+   * de altura numa janela de 844. Ai' `showModal()` roda os passos de foco
+   * dele, o navegador rola o alvo para a vista, e `scrollTop` salta para 723 —
+   * o maximo. A animacao de entrada e' anulada no primeiro quadro: em vez de
+   * subir, a folha aparece de uma vez, encostada no topo e cortada. Depois,
+   * conforme o transform volta a zero, a area rolavel encolhe e o navegador
+   * GRAMPEIA o scrollTop atras dela (723 -> 124 -> 34 -> 0), sempre um quadro
+   * atrasado. Esse grampeamento e' um segundo movimento, com outra curva,
+   * empurrando a folha para posicoes que nenhum estilo pediu — o "abriu um
+   * modal errado e depois o certo".
+   *
+   * `clip` nao cria scrollport nenhum: nao ha' o que rolar, `scrollTop` fica
+   * em 0 e sobra so' a animacao que a folha declarou. Vale para o arrasto de
+   * fechar tambem, que desloca a folha para baixo pelo mesmo caminho.
+   */
+  overflow: clip;
 
   /* `display` e `overlay` precisam de allow-discrete: sem isso o navegador
      tira o dialog da top layer no primeiro quadro e a saida nao anima. */
